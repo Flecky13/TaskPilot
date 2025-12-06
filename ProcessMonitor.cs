@@ -22,17 +22,27 @@ namespace TaskPilot
             _monitoredPrograms = programs;
             _statusCache.Clear();
 
-            // Initialisiere Status-Cache
+            // Initialisiere Status-Cache mit aktuellen Prozess-Status
+            var runningProcesses = Process.GetProcesses()
+                .Select(p => p.ProcessName.ToLowerInvariant())
+                .ToHashSet();
+
             foreach (var program in programs)
             {
+                var processNameLower = program.ProcessName.ToLowerInvariant();
+                var isRunning = runningProcesses.Contains(processNameLower);
+
                 _statusCache[program.ProcessName] = new ProgramStatus
                 {
                     DisplayName = program.DisplayName,
                     ProcessName = program.ProcessName,
                     Description = program.Description,
-                    IsActive = false,
+                    IsActive = isRunning,
                     StatusSince = DateTime.Now
                 };
+
+                // Debug: Initial Status
+                Debug.WriteLine($"[ProcessMonitor] Program initialisiert: {program.DisplayName} - IsActive: {isRunning}");
             }
         }
 
@@ -49,14 +59,21 @@ namespace TaskPilot
 
                 if (_statusCache.TryGetValue(program.ProcessName, out var status))
                 {
+                    Debug.WriteLine($"[ProcessMonitor.UpdateStatuses] {program.ProcessName}: isRunning={isRunning}, wasActive={status.IsActive}");
+
                     if (status.IsActive != isRunning)
                     {
                         // Status hat sich geändert
+                        Debug.WriteLine($"[ProcessMonitor.UpdateStatuses] STATUS CHANGED: {program.ProcessName} -> {isRunning}");
                         status.IsActive = isRunning;
                         status.StatusSince = DateTime.Now;
 
                         StatusChanged?.Invoke(this, status);
                     }
+                }
+                else
+                {
+                    Debug.WriteLine($"[ProcessMonitor.UpdateStatuses] WARNING: {program.ProcessName} nicht im Cache!");
                 }
             }
         }

@@ -65,6 +65,12 @@ namespace TaskPilot
                         case "description":
                             currentProgram.Description = value;
                             break;
+                        case "startcommand":
+                            currentProgram.StartCommand = value;
+                            break;
+                        case "autorestart":
+                            currentProgram.AutoRestart = value.ToLowerInvariant() == "true";
+                            break;
                     }
                 }
             }
@@ -87,6 +93,8 @@ namespace TaskPilot
 ; ProcessName=prozessname (ohne .exe)
 ; DisplayName=Anzeigename in der Oberfläche
 ; Description=Optionale Beschreibung
+; StartCommand=Befehl um Prozess zu starten (optional)
+; AutoRestart=true/false (Optional - Prozess automatisch neu starten wenn nicht laufend)
 ;
 ; Beispiele:
 
@@ -137,6 +145,16 @@ Description=Windows Rechner
                     sb.AppendLine($"Description={program.Description}");
                 }
 
+                if (!string.IsNullOrWhiteSpace(program.StartCommand))
+                {
+                    sb.AppendLine($"StartCommand={program.StartCommand}");
+                }
+
+                if (program.AutoRestart)
+                {
+                    sb.AppendLine("AutoRestart=true");
+                }
+
                 sb.AppendLine();
             }
 
@@ -152,5 +170,7 @@ Description=Windows Rechner
         public string DisplayName { get; set; } = string.Empty;
         public string ProcessName { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
+        public string StartCommand { get; set; } = string.Empty;
+        public bool AutoRestart { get; set; } = false;
     }
 }

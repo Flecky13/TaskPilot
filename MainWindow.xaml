@@ -90,7 +90,11 @@
                     <TextBlock x:Name="ProgramCountText" Text="0 Programme überwacht" VerticalAlignment="Center"/>
                 </StackPanel>
 
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <CheckBox x:Name="AutoStartCheckBox" Content="AutoStart" IsChecked="True"
+                              Checked="AutoStartCheckBox_Checked" Unchecked="AutoStartCheckBox_Unchecked"
+                              Margin="0,0,20,0" VerticalAlignment="Center" Foreground="Black" FontSize="12"/>
+                    <Button Content="Debug-Konsole" Click="ShowDebug_Click" Padding="15,5" Margin="0,0,10,0" Background="#FF9800" Foreground="White" FontWeight="SemiBold"/>
                     <Button Content="Aktualisieren" Click="Refresh_Click" Padding="15,5" Margin="0,0,10,0"/>
                     <Button Content="Konfiguration bearbeiten" Click="EditConfig_Click" Padding="15,5"/>
                 </StackPanel>
