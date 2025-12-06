@@ -22,7 +22,11 @@ namespace TaskPilot
         {
             InitializeComponent();
 
-            _configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "programs.ini");
+            // INI-Datei im %APPDATA%\TaskPilot Verzeichnis speichern (für Schreibzugriff bei Installation in Program Files)
+            string appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TaskPilot");
+            Directory.CreateDirectory(appDataPath); // Stelle sicher, dass das Verzeichnis existiert
+            _configPath = Path.Combine(appDataPath, "programs.ini");
+
             _programStatuses = new ObservableCollection<ProgramStatus>();
             _currentPrograms = new List<MonitoredProgram>();
             ProgramsDataGrid.ItemsSource = _programStatuses;

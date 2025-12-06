@@ -14,7 +14,13 @@ Die Programme können über StartCommand Automatisch gestartet werden
 
 ## Konfiguration
 
-Die Datei `programs.ini` enthält die zu überwachenden Programme:
+Die Datei `programs.ini` wird automatisch im Benutzer-AppData-Verzeichnis gespeichert:
+- **Windows**: `%APPDATA%\TaskPilot\programs.ini`
+- **Beispiel**: `C:\Users\[Benutzername]\AppData\Roaming\TaskPilot\programs.ini`
+
+Das Verzeichnis wird beim ersten Start automatisch erstellt.
+
+Die `programs.ini` enthält die zu überwachenden Programme:
 
 ```ini
 [Program]
@@ -33,6 +39,13 @@ AutoRestart=true
 - **StartCommand**: Befehl zum erneuten starten des Prozesses mit Optionen
 - **AutoRestart**: Program Autstart ?
 
+## Installation & Berechtigungen
+
+TaskPilot kann sicher in `Program Files` installiert werden:
+- ✅ Die Konfigurationsdatei wird im `%APPDATA%` Verzeichnis gespeichert
+- ✅ Schreibzugriff ist nicht für das Installationsverzeichnis erforderlich
+- ✅ Mehrere Benutzer können TaskPilot auf demselben System installieren
+- ✅ Jeder Benutzer hat seine eigene `programs.ini` Konfiguration
 
 ### Lizenz & Kontakt
 ----------------
