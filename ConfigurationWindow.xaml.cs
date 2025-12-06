@@ -112,6 +112,12 @@ namespace TaskPilot
                 IniConfigReader.SaveConfiguration(_configFilePath, selectedPrograms);
                 DialogHelper.ShowConfigurationSaved(selectedPrograms.Count);
 
+                // Main-Window sofort aktualisieren, damit Änderungen direkt sichtbar sind
+                if (Owner is MainWindow mainWindow)
+                {
+                    mainWindow.ReloadConfiguration();
+                }
+
                 // Fenster bleibt offen - nicht schließen!
             }
             catch (Exception ex)

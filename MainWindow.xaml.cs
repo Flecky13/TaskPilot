@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 
 namespace TaskPilot
@@ -15,7 +16,8 @@ namespace TaskPilot
         private ObservableCollection<ProgramStatus> _programStatuses;
         private string _configPath;
         private List<MonitoredProgram> _currentPrograms;
-        private HashSet<string> _recentlyRestartedProcesses = new HashSet<string>(); // Cache um doppelte Restarts zu vermeiden
+        private readonly HashSet<string> _recentlyRestartedProcesses = new HashSet<string>(); // Cache um doppelte Restarts zu vermeiden
+        private readonly object _restartLock = new object();
         private bool _autoStartEnabled = true; // Control-Flag für Auto-Restart (nicht persistent)
 
         public MainWindow()
@@ -67,8 +69,6 @@ namespace TaskPilot
             {
                 _programStatuses.Clear();
                 int inactiveCount = 0;
-                var restartedThisRound = new List<string>(); // Track was in dieser Runde restartet wurde
-
                 foreach (var status in _monitor.GetStatuses())
                 {
                     _programStatuses.Add(status);
@@ -88,7 +88,8 @@ namespace TaskPilot
                             if (program.AutoRestart && !string.IsNullOrWhiteSpace(program.StartCommand))
                             {
                                 // Prüfe ob dieser Prozess kürzlich restartet wurde (Cooldown von 5 Sekunden)
-                                if (_recentlyRestartedProcesses.Contains(program.ProcessName))
+                                var procKey = program.ProcessName.ToLowerInvariant();
+                                if (_recentlyRestartedProcesses.Contains(procKey))
                                 {
                                     DebugWindow.Instance?.LogMessage($"[UpdateProgramStatuses] → SKIPPED: {program.DisplayName} wurde gerade restartet (Cooldown)");
                                 }
@@ -96,7 +97,6 @@ namespace TaskPilot
                                 {
                                     DebugWindow.Instance?.LogMessage($"[UpdateProgramStatuses] → Starte Auto-Restart für {program.DisplayName}");
                                     TryRestartProcess(program, status);
-                                    restartedThisRound.Add(program.ProcessName);
                                 }
                             }
                             else
@@ -109,25 +109,6 @@ namespace TaskPilot
                             DebugWindow.Instance?.LogMessage($"[UpdateProgramStatuses] → Program NICHT gefunden!");
                         }
                     }
-                }
-
-                // Aktualisiere den Cache mit gerade gestarteten Prozessen
-                if (restartedThisRound.Count > 0)
-                {
-                    DebugWindow.Instance?.LogMessage($"[UpdateProgramStatuses] → {restartedThisRound.Count} Prozess(e) restartet in dieser Runde");
-                    foreach (var procName in restartedThisRound)
-                    {
-                        _recentlyRestartedProcesses.Add(procName);
-                    }
-
-                    // Entferne die Einträge nach 5 Sekunden (Cooldown)
-                    _ = System.Threading.Tasks.Task.Delay(5000).ContinueWith(_ =>
-                    {
-                        foreach (var procName in restartedThisRound)
-                        {
-                            _recentlyRestartedProcesses.Remove(procName);
-                        }
-                    });
                 }
 
                 DebugWindow.Instance?.LogMessage($"[UpdateProgramStatuses] Fertig - {inactiveCount} inaktive Prozesse geprüft");
@@ -157,6 +138,27 @@ namespace TaskPilot
                 DebugWindow.Instance?.LogMessage($"[TryRestartProcess] AutoStart ist deaktiviert - {program.DisplayName} wird nicht neu gestartet");
                 return;
             }
+
+            // Cooldown-Schutz mit Lock, um parallele Aufrufe abzufangen
+            var procKey = program.ProcessName.ToLowerInvariant();
+            lock (_restartLock)
+            {
+                if (_recentlyRestartedProcesses.Contains(procKey))
+                {
+                    DebugWindow.Instance?.LogMessage($"[TryRestartProcess] SKIPPED (Cooldown): {program.DisplayName}");
+                    return;
+                }
+
+                _recentlyRestartedProcesses.Add(procKey);
+            }
+
+            _ = Task.Delay(5000).ContinueWith(_ =>
+            {
+                lock (_restartLock)
+                {
+                    _recentlyRestartedProcesses.Remove(procKey);
+                }
+            });
 
             try
             {
