@@ -1,5 +1,5 @@
 # TaskPilot
-![Alt text](Images/ytoolicon.png)
+![Alt text](Images/toolicon.png)
 Eine Systemtray-Anwendung zur Überwachung von Programmen.
 Die Programme können über StartCommand Automatisch gestartet werden
 
