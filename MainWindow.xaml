@@ -58,6 +58,14 @@
                   RowHeight="40"
                   Margin="10">
 
+            <DataGrid.Resources>
+                <ContextMenu x:Key="ProgramRowContextMenu"
+                             DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                    <MenuItem Header="Prozess stoppen" Click="StopProcessMenuItem_Click"/>
+                    <MenuItem Header="Prozess starten" Click="StartProcessMenuItem_Click"/>
+                </ContextMenu>
+            </DataGrid.Resources>
+
             <DataGrid.Columns>
                 <DataGridTemplateColumn Header="Status" Width="80">
                     <DataGridTemplateColumn.CellTemplate>
@@ -75,6 +83,13 @@
                 <DataGridTextColumn Header="Zustand" Binding="{Binding StatusText}" Width="120"/>
                 <DataGridTextColumn Header="Seit" Binding="{Binding StatusSince}" Width="150"/>
             </DataGrid.Columns>
+
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <EventSetter Event="PreviewMouseRightButtonDown" Handler="DataGridRow_PreviewMouseRightButtonDown"/>
+                    <Setter Property="ContextMenu" Value="{StaticResource ProgramRowContextMenu}"/>
+                </Style>
+            </DataGrid.RowStyle>
         </DataGrid>
 
         <!-- Footer / Statusleiste -->

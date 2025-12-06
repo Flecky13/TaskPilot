@@ -4,8 +4,11 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace TaskPilot
 {
@@ -125,7 +128,16 @@ namespace TaskPilot
                 if (program != null)
                 {
                     DebugWindow.Instance?.LogMessage($"[OnStatusChanged] Prozess inaktiv: {status.ProcessName} ({status.DisplayName})");
-                    TryRestartProcess(program, status);
+
+                    // Nur automatisch neu starten, wenn AutoRestart konfiguriert und StartCommand vorhanden
+                    if (program.AutoRestart && !string.IsNullOrWhiteSpace(program.StartCommand))
+                    {
+                        TryRestartProcess(program, status);
+                    }
+                    else
+                    {
+                        DebugWindow.Instance?.LogMessage($"[OnStatusChanged] → Kein Auto-Restart konfiguriert, wird nicht neu gestartet");
+                    }
                 }
             }
         }
@@ -286,6 +298,55 @@ namespace TaskPilot
             catch (Exception ex)
             {
                 DialogHelper.ShowOperationError("Öffnen der Konfiguration", ex.Message);
+            }
+        }
+
+        // Rechtsklick auf eine Zeile: selektiert die Zeile, egal in welcher Spalte geklickt wurde
+        private void DataGridRow_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is DataGridRow row)
+            {
+                row.IsSelected = true;
+                row.Focus();
+            }
+        }
+
+        // Kontextmenü: Prozess stoppen
+        private void StopProcessMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (ProgramsDataGrid.SelectedItem is ProgramStatus status)
+            {
+                try
+                {
+                    foreach (var proc in Process.GetProcessesByName(status.ProcessName))
+                    {
+                        proc.Kill();
+                    }
+
+                    StatusText.Text = $"Prozess {status.ProcessName} gestoppt.";
+                    UpdateProgramStatuses();
+                }
+                catch (Exception ex)
+                {
+                    StatusText.Text = $"Fehler beim Stoppen: {ex.Message}";
+                }
+            }
+        }
+
+        // Kontextmenü: Prozess starten (wenn StartCommand vorhanden)
+        private void StartProcessMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (ProgramsDataGrid.SelectedItem is ProgramStatus status)
+            {
+                var program = _currentPrograms.FindByProcessName(status.ProcessName);
+                if (program != null && !string.IsNullOrWhiteSpace(program.StartCommand))
+                {
+                    TryRestartProcess(program, status);
+                }
+                else
+                {
+                    StatusText.Text = $"Kein Startbefehl für {status.ProcessName} konfiguriert.";
+                }
             }
         }
 
