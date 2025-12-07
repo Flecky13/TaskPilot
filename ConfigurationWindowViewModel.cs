@@ -67,7 +67,7 @@ namespace TaskPilot
                 {
                     ProcessName = program.ProcessName,
                     DisplayName = program.DisplayName,
-                    IsSelected = true,  // In der INI konfigurierte Programme sind standardmäßig "überwacht"
+                    IsSelected = program.IsSelected,  // Lese IsSelected aus der INI
                     Description = program.Description,
                     AutoRestart = program.AutoRestart,
                     StartCommand = program.StartCommand
@@ -173,6 +173,21 @@ namespace TaskPilot
                 .ToList();
         }
 
+        public List<MonitoredProgram> GetAllPrograms()
+        {
+            return _allProcesses
+                .Select(p => new MonitoredProgram
+                {
+                    ProcessName = p.ProcessName,
+                    DisplayName = p.DisplayName,
+                    Description = p.Description,
+                    AutoRestart = p.AutoRestart,
+                    StartCommand = p.StartCommand,
+                    IsSelected = p.IsSelected
+                })
+                .ToList();
+        }
+
         public List<MonitoredProgram> GetDeselectedPrograms()
         {
             return _allProcesses
@@ -202,6 +217,13 @@ namespace TaskPilot
             {
                 process.IsSelected = false;
             }
+        }
+
+        public void RemoveProcess(ConfigurableProcess process)
+        {
+            // Entferne aus der Liste
+            _allProcesses.Remove(process);
+            _availableProcesses.Remove(process);
         }
 
         public void RefreshProcesses()

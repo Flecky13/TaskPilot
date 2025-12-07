@@ -54,9 +54,13 @@ namespace TaskPilot
         {
             try
             {
-                _currentPrograms = IniConfigReader.ReadConfiguration(_configPath);
+                // Nur überwachte Programme (IsSelected) ins Monitoring übernehmen
+                _currentPrograms = IniConfigReader.ReadConfiguration(_configPath)
+                    .Where(p => p.IsSelected)
+                    .ToList();
+
                 _monitor.SetMonitoredPrograms(_currentPrograms);
-                StatusText.Text = $"Konfiguration geladen: {_currentPrograms.Count} Programme";
+                StatusText.Text = $"Konfiguration geladen: {_currentPrograms.Count} überwachte Programme";
             }
             catch (Exception ex)
             {

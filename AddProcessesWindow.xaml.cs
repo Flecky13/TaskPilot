@@ -10,6 +10,9 @@ namespace TaskPilot
         private AddProcessesWindowViewModel? _viewModel;
         private string _configFilePath;
 
+        // Für die Rückgabe an AddSingleProcessWindow
+        public SelectableProcess? SelectedProcess { get; private set; }
+
         public AddProcessesWindow(string configFilePath)
         {
             InitializeComponent();
@@ -42,6 +45,16 @@ namespace TaskPilot
                     return;
                 }
 
+                // Wenn nur ein Prozess ausgewählt ist, gib diesen zu AddSingleProcessWindow zurück
+                if (selectedProcesses.Count == 1)
+                {
+                    SelectedProcess = selectedProcesses[0];
+                    DialogResult = true;
+                    Close();
+                    return;
+                }
+
+                // Wenn mehrere Prozesse ausgewählt sind, speichere sie direkt in INI
                 // Lade aktuelle INI-Konfiguration
                 var currentPrograms = IniConfigReader.ReadConfiguration(_configFilePath);
 

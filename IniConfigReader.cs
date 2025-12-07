@@ -71,6 +71,10 @@ namespace TaskPilot
                         case "autorestart":
                             currentProgram.AutoRestart = value.ToLowerInvariant() == "true";
                             break;
+                        case "isselected":
+                        case "überwachen":
+                            currentProgram.IsSelected = value.ToLowerInvariant() == "true";
+                            break;
                     }
                 }
             }
@@ -127,38 +131,71 @@ Description=Windows Rechner
             File.WriteAllText(filePath, defaultConfig, Encoding.UTF8);
         }
 
-        public static void SaveConfiguration(string filePath, List<MonitoredProgram> programs)
+        public static void SaveConfiguration(string filePath, List<MonitoredProgram> programs, bool appendMode = false)
         {
-            var sb = new StringBuilder();
-            sb.AppendLine("; TaskPilot Konfigurationsdatei");
-            sb.AppendLine("; Generiert am: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
-            sb.AppendLine();
-
-            foreach (var program in programs)
+            if (appendMode && File.Exists(filePath))
             {
-                sb.AppendLine($"[{program.DisplayName}]");
-                sb.AppendLine($"ProcessName={program.ProcessName}");
-                sb.AppendLine($"DisplayName={program.DisplayName}");
-
-                if (!string.IsNullOrWhiteSpace(program.Description))
-                {
-                    sb.AppendLine($"Description={program.Description}");
-                }
-
-                if (!string.IsNullOrWhiteSpace(program.StartCommand))
-                {
-                    sb.AppendLine($"StartCommand={program.StartCommand}");
-                }
-
-                if (program.AutoRestart)
-                {
-                    sb.AppendLine("AutoRestart=true");
-                }
-
+                // Anhängmodus: Füge nur neue Programme an das Ende der Datei an
+                var sb = new StringBuilder();
                 sb.AppendLine();
-            }
+                foreach (var program in programs)
+                {
+                    sb.AppendLine($"[{program.DisplayName}]");
+                    sb.AppendLine($"ProcessName={program.ProcessName}");
+                    sb.AppendLine($"DisplayName={program.DisplayName}");
 
-            File.WriteAllText(filePath, sb.ToString(), Encoding.UTF8);
+                    if (!string.IsNullOrWhiteSpace(program.Description))
+                    {
+                        sb.AppendLine($"Description={program.Description}");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(program.StartCommand))
+                    {
+                        sb.AppendLine($"StartCommand={program.StartCommand}");
+                    }
+
+                    // Schreibe beide Checkbox-Werte immer, damit sie nicht auf Default zurückfallen
+                    sb.AppendLine($"AutoRestart={(program.AutoRestart ? "true" : "false")}");
+                    sb.AppendLine($"IsSelected={(program.IsSelected ? "true" : "false")}");
+
+                    sb.AppendLine();
+                }
+
+                File.AppendAllText(filePath, sb.ToString(), Encoding.UTF8);
+            }
+            else
+            {
+                // Normalmodus: Überschreibe die gesamte Datei
+                var sb = new StringBuilder();
+                sb.AppendLine("; TaskPilot Konfigurationsdatei");
+                sb.AppendLine("; Generiert am: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+                sb.AppendLine();
+
+                foreach (var program in programs)
+                {
+                    sb.AppendLine($"[{program.DisplayName}]");
+                    sb.AppendLine($"ProcessName={program.ProcessName}");
+                    sb.AppendLine($"DisplayName={program.DisplayName}");
+
+                    if (!string.IsNullOrWhiteSpace(program.Description))
+                    {
+                        sb.AppendLine($"Description={program.Description}");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(program.StartCommand))
+                    {
+                        sb.AppendLine($"StartCommand={program.StartCommand}");
+                    }
+
+                    // Schreibe beide Checkbox-Werte immer, damit sie nicht auf Default zurückfallen
+                    sb.AppendLine($"AutoRestart={(program.AutoRestart ? "true" : "false")}");
+                    sb.AppendLine($"IsSelected={(program.IsSelected ? "true" : "false")}");
+
+                    sb.AppendLine();
+                }
+
+                File.WriteAllText(filePath, sb.ToString(), Encoding.UTF8);
+            }
         }
     }
 
@@ -173,5 +210,6 @@ Description=Windows Rechner
         public string StartCommand { get; set; } = string.Empty;
         public bool AutoRestart { get; set; } = false;
         public int LastStartedPID { get; set; } = 0; // Speichert die PID des zuletzt gestarteten Prozesses
+        public bool IsSelected { get; set; } = true; // Bestimmt, ob der Prozess im MainWindow angezeigt wird
     }
 }

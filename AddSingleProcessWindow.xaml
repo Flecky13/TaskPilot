@@ -1,0 +1,58 @@
+<Window x:Class="TaskPilot.AddSingleProcessWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Neuen Prozess hinzufügen"
+        Height="650" Width="640"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        Background="#F5F5F5">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Titel -->
+        <TextBlock x:Name="TitleTextBlock" Grid.Row="0" Text="Neuen Prozess manuell hinzufügen" FontSize="16" FontWeight="Bold" Foreground="#333" Margin="0,0,0,20"/>
+
+        <!-- Programmname -->
+        <TextBlock Grid.Row="1" Text="Programmname (erforderlich)*" FontWeight="SemiBold" Foreground="#333" Margin="0,0,0,5"/>
+        <TextBox Grid.Row="2" x:Name="DisplayNameTextBox" Padding="10,8" Background="White" BorderBrush="#CCCCCC" BorderThickness="1" Foreground="#333" FontSize="12" Margin="0,0,0,20"/>
+
+        <!-- Prozessname -->
+        <TextBlock Grid.Row="3" Text="Prozessname (erforderlich)*" FontWeight="SemiBold" Foreground="#333" Margin="0,0,0,5"/>
+        <TextBox Grid.Row="4" x:Name="ProcessNameTextBox" Padding="10,8" Background="White" BorderBrush="#CCCCCC" BorderThickness="1" Foreground="#333" FontSize="12" Margin="0,0,0,5"/>
+        <TextBlock Grid.Row="5" Text="Hinweis: Der Name des EXE-Prozesses ohne .exe (z.B. notepad, cmd)" FontSize="10" Foreground="#666" Margin="0,0,0,20"/>
+
+        <!-- Beschreibung -->
+        <TextBlock Grid.Row="6" Text="Beschreibung (optional)" FontWeight="SemiBold" Foreground="#333" Margin="0,0,0,5"/>
+        <TextBox Grid.Row="7" x:Name="DescriptionTextBox" Padding="10,8" Background="White" BorderBrush="#CCCCCC" BorderThickness="1" Foreground="#333" FontSize="12" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" MinHeight="80"/>
+
+        <!-- Startbefehl -->
+        <TextBlock Grid.Row="8" Text="Startbefehl (optional, erforderlich für Auto-Restart)" FontWeight="SemiBold" Foreground="#333" Margin="0,12,0,5"/>
+        <TextBox Grid.Row="9" x:Name="StartCommandTextBox" Padding="10,8" Background="White" BorderBrush="#CCCCCC" BorderThickness="1" Foreground="#333" FontSize="12" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" MinHeight="60"/>
+
+        <!-- Optionen -->
+        <StackPanel Grid.Row="10" Orientation="Horizontal" Margin="0,12,0,0">
+            <CheckBox x:Name="IsSelectedCheckBox" Content="Überwachen" IsChecked="True" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,20,0"/>
+            <CheckBox x:Name="AutoRestartCheckBox" Content="Auto-Restart" IsChecked="False" VerticalAlignment="Center" FontWeight="SemiBold"/>
+        </StackPanel>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="11" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+            <Button Content="Abbrechen" Click="Cancel_Click" Padding="20,10" Margin="0,0,10,0" Background="#9E9E9E" Foreground="White" FontWeight="SemiBold" Width="100"/>
+            <Button x:Name="AddButton" Content="Hinzufügen" Click="Add_Click" Padding="20,10" Background="#4CAF50" Foreground="White" FontWeight="SemiBold" Width="100"/>
+        </StackPanel>
+    </Grid>
+</Window>

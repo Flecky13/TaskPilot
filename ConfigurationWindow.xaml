@@ -5,7 +5,8 @@
         Height="600" Width="900"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize"
-        Icon="/icons/toolicon.ico">
+        Icon="/icons/toolicon.ico"
+        Closing="Window_Closing">
 
     <Grid Background="#F5F5F5">
         <Grid.RowDefinitions>
@@ -25,34 +26,19 @@
 
         <!-- Filter -->
         <Border Grid.Row="1" Background="White" Padding="20" BorderBrush="#DDDDDD" BorderThickness="0,1,0,1">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="Prozesse filtern:" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                    <TextBox x:Name="FilterTextBox"
-                             Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
-                             Padding="10,8"
-                             Background="White"
-                             BorderBrush="#CCCCCC"
-                             BorderThickness="1"
-                             Foreground="#333"
-                             FontSize="12"/>
-                    <TextBlock Text="Tipp: Nutzen Sie * (beliebig viele Zeichen) oder ? (ein Zeichen) für Wildcard-Suche"
-                               FontSize="10" Foreground="#666" Margin="0,5,0,0"/>
-                </StackPanel>
-
-                <StackPanel Grid.Column="1" VerticalAlignment="Bottom" Margin="20,0,0,0" Orientation="Horizontal">
-                    <Button Content="Neu laden" Click="Refresh_Click" Padding="15,8" Background="#2196F3" Foreground="White" FontWeight="SemiBold" Margin="0,0,10,0"/>
-                    <Button Content="Alle aktivieren" Click="SelectAll_Click" Padding="15,8" Background="#4CAF50" Foreground="White" FontWeight="SemiBold" Margin="0,0,10,0"/>
-                    <Button Content="Alle entfernen" Click="DeselectAll_Click" Padding="15,8" Background="#F44336" Foreground="White" FontWeight="SemiBold" Margin="0,0,10,0"/>
-                    <Button Content="Hilfe" Click="ShowHelp_Click" Padding="15,8" Background="#FF9800" Foreground="White" FontWeight="SemiBold" Margin="0,0,10,0"/>
-                    <Button Content="Prozesse hinzufügen" Click="AddProcesses_Click" Padding="15,8" Background="#FF9800" Foreground="White" FontWeight="SemiBold"/>
-                </StackPanel>
-            </Grid>
+            <StackPanel>
+                <TextBlock Text="Prozesse filtern:" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                <TextBox x:Name="FilterTextBox"
+                         Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                         Padding="10,8"
+                         Background="White"
+                         BorderBrush="#CCCCCC"
+                         BorderThickness="1"
+                         Foreground="#333"
+                         FontSize="12"/>
+                <TextBlock Text="Tipp: Nutzen Sie * (beliebig viele Zeichen) oder ? (ein Zeichen) für Wildcard-Suche"
+                           FontSize="10" Foreground="#666" Margin="0,5,0,0"/>
+            </StackPanel>
         </Border>
 
         <!-- Prozessliste -->
@@ -66,24 +52,44 @@
                   CanUserResizeRows="False"
                   CanUserSortColumns="False"
                   AlternatingRowBackground="#FAFAFA"
-                  RowHeight="45"
+                  RowHeight="22"
                   Margin="20">
 
             <DataGrid.Columns>
-                <DataGridCheckBoxColumn Header="Überwachen" Binding="{Binding IsSelected}" Width="80" IsReadOnly="False"/>
+                <DataGridCheckBoxColumn Header="Überwachen" Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="80" IsReadOnly="False"/>
                 <DataGridTextColumn Header="Programmname" Binding="{Binding DisplayName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="*" IsReadOnly="False"/>
                 <DataGridTextColumn Header="Prozessname" Binding="{Binding ProcessName}" Width="160" IsReadOnly="True"/>
                 <DataGridTextColumn Header="Beschreibung" Binding="{Binding Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="200" IsReadOnly="False"/>
                 <DataGridCheckBoxColumn Header="Auto-Restart" Binding="{Binding AutoRestart, Mode=TwoWay}" Width="100" IsReadOnly="False"/>
                 <DataGridTextColumn Header="Startbefehl" Binding="{Binding StartCommand, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="220" IsReadOnly="False"/>
+                <DataGridTemplateColumn Header="Aktion" Width="170">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button Content="Bearbeiten" Click="EditProcess_Click" Padding="8,5" Margin="0,0,5,0" Background="#2196F3" Foreground="White" FontSize="11" FontWeight="SemiBold"/>
+                                <Button Content="Löschen" Click="DeleteProcess_Click" Padding="8,5" Background="#F44336" Foreground="White" FontSize="11" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
             </DataGrid.Columns>
         </DataGrid>
 
         <!-- Footer mit Buttons -->
         <Border Grid.Row="3" Background="White" Padding="20" BorderBrush="#DDDDDD" BorderThickness="0,1,0,0">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Content="Schließen" Click="Cancel_Click" Padding="20,10" Margin="0,0,10,0" Background="#9E9E9E" Foreground="White" FontWeight="SemiBold" Width="120"/>
-                <Button Content="Übernehmen" Click="Apply_Click" Padding="20,10" Background="#4CAF50" Foreground="White" FontWeight="SemiBold" Width="120"/>
+            <StackPanel>
+                <!-- Erste Zeile: Funktionsbuttons -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,10">
+                    <Button Content="Neuer Prozess" Click="AddSingleProcess_Click" Padding="15,8" Background="#2196F3" Foreground="White" FontWeight="SemiBold" Margin="0,0,10,0"/>
+                    <Button Content="Alle aktivieren" Click="SelectAll_Click" Padding="15,8" Background="#4CAF50" Foreground="White" FontWeight="SemiBold" Margin="0,0,10,0"/>
+                    <Button Content="Hilfe" Click="ShowHelp_Click" Padding="15,8" Background="#FF9800" Foreground="White" FontWeight="SemiBold"/>
+                </StackPanel>
+
+                <!-- Zweite Zeile: Schließen und Übernehmen -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="Schließen" Click="Cancel_Click" Padding="20,10" Margin="0,0,10,0" Background="#9E9E9E" Foreground="White" FontWeight="SemiBold" Width="120"/>
+                    <Button Content="Übernehmen" Click="Apply_Click" Padding="20,10" Background="#4CAF50" Foreground="White" FontWeight="SemiBold" Width="120"/>
+                </StackPanel>
             </StackPanel>
         </Border>
     </Grid>

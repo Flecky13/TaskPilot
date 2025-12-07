@@ -55,7 +55,7 @@
                   CanUserResizeRows="False"
                   CanUserSortColumns="True"
                   AlternatingRowBackground="#FAFAFA"
-                  RowHeight="40"
+                  RowHeight="20"
                   Margin="10">
 
             <DataGrid.Resources>

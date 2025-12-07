@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
+using System.ComponentModel;
 
 namespace TaskPilot
 {
@@ -78,7 +79,119 @@ namespace TaskPilot
             }
             catch (Exception ex)
             {
-                DialogHelper.ShowOperationError("\u00d6ffnen des Prozess-Hinzuf\u00fcgen-Fensters", ex.Message);
+                DialogHelper.ShowOperationError("Öffnen des Prozess-Hinzufügen-Fensters", ex.Message);
+            }
+        }
+
+        private void AddSingleProcess_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var addWindow = new AddSingleProcessWindow()
+                {
+                    Owner = this
+                };
+
+                bool? result = addWindow.ShowDialog();
+
+                if (result == true)
+                {
+                    // Füge den neuen Prozess hinzu
+                    var newProgram = new MonitoredProgram
+                    {
+                        ProcessName = addWindow.ProcessName,
+                        DisplayName = addWindow.DisplayName,
+                        Description = addWindow.Description,
+                        AutoRestart = addWindow.AutoRestart,
+                        StartCommand = addWindow.StartCommand,
+                        IsSelected = addWindow.IsSelected,
+                        LastStartedPID = 0
+                    };
+
+                    // Speichere sofort in der INI
+                    IniConfigReader.SaveConfiguration(_configFilePath, new List<MonitoredProgram> { newProgram }, appendMode: true);
+
+                    // Neu laden der ViewModel
+                    var updatedPrograms = IniConfigReader.ReadConfiguration(_configFilePath);
+                    _viewModel = new ConfigurationWindowViewModel(updatedPrograms);
+                    DataContext = _viewModel;
+
+                    DialogHelper.ShowNewProcessAdded(newProgram.DisplayName);
+                }
+            }
+            catch (Exception ex)
+            {
+                DialogHelper.ShowOperationError("Hinzufügen des Prozesses", ex.Message);
+            }
+        }
+
+        private void DeleteProcess_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (ProcessesDataGrid.SelectedItem is ConfigurableProcess process)
+                {
+                    var result = DialogHelper.AskDeleteProcess(process.DisplayName);
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        _viewModel?.RemoveProcess(process);
+                        DialogHelper.ShowProcessDeleted(process.DisplayName);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DialogHelper.ShowOperationError("Löschen des Prozesses", ex.Message);
+            }
+        }
+
+        private void EditProcess_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (ProcessesDataGrid.SelectedItem is ConfigurableProcess process)
+                {
+                    // Erstelle MonitoredProgram aus ConfigurableProcess
+                    var program = new MonitoredProgram
+                    {
+                        ProcessName = process.ProcessName,
+                        DisplayName = process.DisplayName,
+                        Description = process.Description,
+                        StartCommand = process.StartCommand,
+                        AutoRestart = process.AutoRestart,
+                        IsSelected = process.IsSelected,
+                        LastStartedPID = 0
+                    };
+
+                    // Öffne Dialog im Bearbeitungsmodus
+                    var editWindow = new AddSingleProcessWindow(program)
+                    {
+                        Owner = this
+                    };
+
+                    bool? result = editWindow.ShowDialog();
+
+                    if (result == true)
+                    {
+                        // Aktualisiere den Prozess in der ViewModel
+                        process.ProcessName = editWindow.ProcessName;
+                        process.DisplayName = editWindow.DisplayName;
+                        process.Description = editWindow.Description;
+                        process.StartCommand = editWindow.StartCommand;
+                        process.AutoRestart = editWindow.AutoRestart;
+                        process.IsSelected = editWindow.IsSelected;
+
+                        // Speichere sofort in der INI
+                        var allPrograms = _viewModel?.GetAllPrograms() ?? new List<MonitoredProgram>();
+                        IniConfigReader.SaveConfiguration(_configFilePath, allPrograms);
+
+                        DialogHelper.ShowInfo($"Der Prozess \"{editWindow.DisplayName}\" wurde erfolgreich aktualisiert.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DialogHelper.ShowOperationError("Bearbeiten des Prozesses", ex.Message);
             }
         }
 
@@ -86,17 +199,17 @@ namespace TaskPilot
         {
             try
             {
-                var selectedPrograms = _viewModel?.GetSelectedPrograms() ?? new List<MonitoredProgram>();
-                var deselectedPrograms = _viewModel?.GetDeselectedPrograms() ?? new List<MonitoredProgram>();
+                // Hole ALLE Prozesse (sowohl markiert als auch unmarkiert)
+                var allPrograms = _viewModel?.GetAllPrograms() ?? new List<MonitoredProgram>();
 
-                if (selectedPrograms.Count == 0)
+                if (allPrograms.Count == 0)
                 {
                     DialogHelper.ShowSelectAtLeastOneProcess();
                     return;
                 }
 
                 // Validierung: Auto-Restart erfordert StartCommand
-                var invalidPrograms = selectedPrograms
+                var invalidPrograms = allPrograms
                     .Where(p => p.AutoRestart && string.IsNullOrWhiteSpace(p.StartCommand))
                     .ToList();
 
@@ -109,8 +222,12 @@ namespace TaskPilot
                     return;
                 }
 
-                IniConfigReader.SaveConfiguration(_configFilePath, selectedPrograms);
-                DialogHelper.ShowConfigurationSaved(selectedPrograms.Count);
+                // Speichere ALLE Programme in die INI
+                IniConfigReader.SaveConfiguration(_configFilePath, allPrograms);
+
+                // Zähle nur die überwachten für die Meldung
+                var monitoredCount = allPrograms.Count(p => p.IsSelected);
+                DialogHelper.ShowConfigurationSaved(monitoredCount);
 
                 // Main-Window sofort aktualisieren, damit Änderungen direkt sichtbar sind
                 if (Owner is MainWindow mainWindow)
@@ -128,8 +245,22 @@ namespace TaskPilot
 
         private void Cancel_Click(object sender, RoutedEventArgs e)
         {
+            // MainWindow aktualisieren beim Schließen
+            if (Owner is MainWindow mainWindow)
+            {
+                mainWindow.ReloadConfiguration();
+            }
+
             DialogResult = false;
             Close();
+        }
+
+        private void Window_Closing(object? sender, CancelEventArgs e)
+        {
+            if (Owner is MainWindow mainWindow)
+            {
+                mainWindow.ReloadConfiguration();
+            }
         }
     }
 }

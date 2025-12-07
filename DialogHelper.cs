@@ -92,5 +92,20 @@ namespace TaskPilot
         {
             return ShowConfirm("Sind Sie sicher, dass Sie alle Prozesse entfernen möchten?");
         }
+
+        public static void ShowNewProcessAdded(string processName)
+        {
+            ShowInfo($"Prozess '{processName}' erfolgreich hinzugefügt.");
+        }
+
+        public static MessageBoxResult AskDeleteProcess(string processName)
+        {
+            return ShowConfirm($"Sind Sie sicher, dass Sie '{processName}' aus der Liste löschen möchten?");
+        }
+
+        public static void ShowProcessDeleted(string processName)
+        {
+            ShowInfo($"Prozess '{processName}' wurde aus der Liste gelöscht.");
+        }
     }
 }
