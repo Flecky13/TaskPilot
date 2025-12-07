@@ -7,10 +7,38 @@ Die Programme können über StartCommand Automatisch gestartet werden
 
 - **Systemtray-Integration**: Läuft im Hintergrund und zeigt ein Icon im Systemtray
 - **Programmüberwachung**: Überwacht konfigurierte Programme und zeigt deren Status (Aktiv/Inaktiv)
+- **Context-Menü**: Rechtsklick auf Prozess für schnelle Kontrolle (Start/Stop/Minimieren/Maximieren)
+- **Auto-Restart**: Automatisches Neustarten von abgestürzten Programmen basierend auf Konfiguration
 - **INI-Konfiguration**: Einfache Konfiguration über eine `programs.ini` Datei
 - **Konfigurations GUI**: Einfache Konfiguration über Konfig GUI mit Automatischer Anpassung der 'programs.ini' Datei
 - **Echtzeit-Updates**: Automatische Aktualisierung alle 5 Sekunden
-- **Übersichtliche GUI**: GUI-Oberfläche mit Status-Anzeige
+- **Übersichtliche GUI**: GUI-Oberfläche mit Status-Anzeige und Prozess-Informationen
+
+## Funktionsübersicht
+
+### Hauptfenster
+- **Prozessliste**: Zeigt alle überwachten Programme mit Status (aktiv/inaktiv), PID und Startzeit
+- **Context-Menü**: Rechtsklick auf Status-Spalte ermöglicht:
+  - Prozess stoppen
+  - Prozess starten
+  - Prozess minimieren
+  - Prozess in den Vordergrund bringen
+- **Alle minimieren/maximieren**: Schnelle Kontrolle für alle Prozesse
+- **AutoStart-Checkbox**: Global AutoRestart aktivieren/deaktivieren
+- **Letzte Aktualisierung**: Zeigt Datum und Uhrzeit der letzten Status-Prüfung (DD.MM.YYYY HH:MM:SS)
+
+### Konfigurationsfenster
+- **Prozess-Filter**: Schnelle Suche mit Wildcard-Unterstützung (* und ?)
+- **Schnell-Buttons**:
+  - **Neuer Prozess**: Manuell einen Prozess hinzufügen
+  - **Alle Überwachen**: Alle Prozesse zur Überwachung aktivieren
+  - **Überwachen aus**: Alle Prozesse deaktivieren
+  - **Alle AutoStart**: AutoRestart für alle Prozesse aktivieren (erfordert Startbefehl)
+  - **AutoStart aus**: AutoRestart für alle Prozesse deaktivieren
+  - **Hilfe**: Öffnet Hilfefenster
+- **Prozess-Bearbeitung**: Inline-Bearbeitung aller Felder in der Tabelle
+- **Bearbeit/Löschen-Buttons**: Symbol-Buttons (✎ Bearbeiten, 🗑 Löschen) für kompakte Darstellung
+- **Übernehmen**: Speichert alle Änderungen in der INI-Datei
 
 ## Konfiguration
 
@@ -29,6 +57,7 @@ DisplayName=Program Display Name
 Description=Program Beschreibung
 StartCommand=c:\Programpfad\Programm.exe
 AutoRestart=true
+IsSelected=true
 ```
 
 ### Felder:
@@ -37,7 +66,8 @@ AutoRestart=true
 - **DisplayName**: Anzeigename in der Oberfläche
 - **Description**: Optionale Beschreibung
 - **StartCommand**: Befehl zum erneuten starten des Prozesses mit Optionen
-- **AutoRestart**: Program Autstart ?
+- **AutoRestart**: Automatisches Neustarten bei Absturz (true/false)
+- **IsSelected**: Prozess wird überwacht (true) oder ignoriert (false)
 
 ## Installation & Berechtigungen
 
