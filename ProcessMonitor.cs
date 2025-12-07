@@ -48,18 +48,23 @@ namespace TaskPilot
 
         public void UpdateStatuses()
         {
+            // Erstelle ein Lookup statt Dictionary, um mehrere Prozesse mit demselben Namen zu unterstützen
             var runningProcesses = Process.GetProcesses()
-                .Select(p => p.ProcessName.ToLowerInvariant())
-                .ToHashSet();
+                .ToLookup(p => p.ProcessName.ToLowerInvariant(), p => p.Id);
 
             foreach (var program in _monitoredPrograms)
             {
                 var processNameLower = program.ProcessName.ToLowerInvariant();
-                var isRunning = runningProcesses.Contains(processNameLower);
+                var processIds = runningProcesses[processNameLower].ToList();
+                var isRunning = processIds.Count > 0;
+                var processId = processIds.FirstOrDefault();
 
                 if (_statusCache.TryGetValue(program.ProcessName, out var status))
                 {
                     Debug.WriteLine($"[ProcessMonitor.UpdateStatuses] {program.ProcessName}: isRunning={isRunning}, wasActive={status.IsActive}");
+
+                    // Update ProcessID (erste aktive PID, oder 0 wenn nicht laufend)
+                    status.ProcessID = isRunning ? processId : 0;
 
                     if (status.IsActive != isRunning)
                     {
@@ -91,10 +96,23 @@ namespace TaskPilot
     {
         private bool _isActive;
         private DateTime _statusSince;
+        private int _processID;
 
         public string DisplayName { get; set; } = string.Empty;
         public string ProcessName { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
+        public int ProcessID
+        {
+            get => _processID;
+            set
+            {
+                if (_processID != value)
+                {
+                    _processID = value;
+                    OnPropertyChanged(nameof(ProcessID));
+                }
+            }
+        }
 
         public bool IsActive
         {

@@ -172,5 +172,6 @@ Description=Windows Rechner
         public string Description { get; set; } = string.Empty;
         public string StartCommand { get; set; } = string.Empty;
         public bool AutoRestart { get; set; } = false;
+        public int LastStartedPID { get; set; } = 0; // Speichert die PID des zuletzt gestarteten Prozesses
     }
 }

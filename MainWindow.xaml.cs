@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -151,13 +152,25 @@ namespace TaskPilot
                 return;
             }
 
+            StartProcessWithCommand(program, status);
+        }
+
+        // Manueller Start (von Kontextmenü) - ignoriert AutoStart-Flag
+        private void ManualStartProcess(MonitoredProgram program, ProgramStatus status)
+        {
+            StartProcessWithCommand(program, status);
+        }
+
+        // Gemeinsame Start-Logik
+        private void StartProcessWithCommand(MonitoredProgram program, ProgramStatus status)
+        {
             // Cooldown-Schutz mit Lock, um parallele Aufrufe abzufangen
             var procKey = program.ProcessName.ToLowerInvariant();
             lock (_restartLock)
             {
                 if (_recentlyRestartedProcesses.Contains(procKey))
                 {
-                    DebugWindow.Instance?.LogMessage($"[TryRestartProcess] SKIPPED (Cooldown): {program.DisplayName}");
+                    DebugWindow.Instance?.LogMessage($"[StartProcessWithCommand] SKIPPED (Cooldown): {program.DisplayName}");
                     return;
                 }
 
@@ -174,11 +187,14 @@ namespace TaskPilot
 
             try
             {
-                DebugWindow.Instance?.LogMessage($"[TryRestartProcess] Starten: {program.DisplayName}");
+                DebugWindow.Instance?.LogMessage($"[StartProcessWithCommand] Starten: {program.DisplayName}");
                 DebugWindow.Instance?.LogMessage($"  → AutoRestart: {program.AutoRestart}");
                 DebugWindow.Instance?.LogMessage($"  → Befehl: {program.StartCommand}");
 
                 var startCommand = program.StartCommand.Trim();
+
+                // Generiere eindeutigen Fenster-Titel (DisplayName ohne TaskPilot-Zusatz)
+                string windowTitle = $"{program.DisplayName}";
 
                 ProcessStartInfo? startInfo = null;
 
@@ -188,10 +204,13 @@ namespace TaskPilot
                     var cmdArguments = startCommand.Substring(6).Trim();
                     DebugWindow.Instance?.LogMessage($"  → Format: START-Command");
 
+                    // Füge TITLE-Befehl hinzu
+                    var fullCommand = $"title {windowTitle} & {cmdArguments}";
+
                     startInfo = new ProcessStartInfo
                     {
                         FileName = "cmd.exe",
-                        Arguments = $"/c {cmdArguments}",
+                        Arguments = $"/c {fullCommand}",
                         UseShellExecute = true,
                         CreateNoWindow = false
                     };
@@ -200,10 +219,13 @@ namespace TaskPilot
                 {
                     DebugWindow.Instance?.LogMessage($"  → Format: Befehl mit Parametern");
 
+                    // Füge TITLE-Befehl hinzu
+                    var fullCommand = $"title {windowTitle} & {startCommand}";
+
                     startInfo = new ProcessStartInfo
                     {
                         FileName = "cmd.exe",
-                        Arguments = $"/c {startCommand}",
+                        Arguments = $"/c {fullCommand}",
                         UseShellExecute = true,
                         CreateNoWindow = true
                     };
@@ -221,8 +243,18 @@ namespace TaskPilot
                 }
 
                 var startedProcess = Process.Start(startInfo);
-                DebugWindow.Instance?.LogMessage($"✓ {program.DisplayName} gestartet (PID: {startedProcess?.Id})");
-                StatusText.Text = $"✓ {program.DisplayName} neu gestartet";
+                if (startedProcess != null)
+                {
+                    program.LastStartedPID = startedProcess.Id;
+                    DebugWindow.Instance?.LogMessage($"✓ {program.DisplayName} gestartet (PID: {startedProcess.Id})");
+                    DebugWindow.Instance?.LogMessage($"  → Fenster-Titel: {windowTitle}");
+                    StatusText.Text = $"✓ {program.DisplayName} neu gestartet (PID: {startedProcess.Id})";
+                }
+                else
+                {
+                    DebugWindow.Instance?.LogMessage($"✗ Prozess konnte nicht gestartet werden: {program.DisplayName}");
+                    StatusText.Text = $"✗ Fehler: {program.DisplayName} konnte nicht gestartet werden";
+                }
             }
             catch (Exception ex)
             {
@@ -301,13 +333,39 @@ namespace TaskPilot
             }
         }
 
-        // Rechtsklick auf eine Zeile: selektiert die Zeile, egal in welcher Spalte geklickt wurde
-        private void DataGridRow_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        // Event: Status-Spalte Rechtsklick
+        private void StatusCell_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
         {
-            if (sender is DataGridRow row)
+            if (sender is FrameworkElement element && element.DataContext is ProgramStatus status)
             {
-                row.IsSelected = true;
-                row.Focus();
+                // Finde die entsprechende Zeile und selektiere sie
+                var row = ItemsControl.ContainerFromElement(ProgramsDataGrid, element) as DataGridRow;
+                if (row != null)
+                {
+                    row.IsSelected = true;
+                    row.Focus();
+                }
+            }
+        }
+
+        // Event: Context Menu öffnen - dynamisch Menu Items en/disable
+        private void ContextMenu_Opening(object sender, ContextMenuEventArgs e)
+        {
+            if (sender is ContextMenu menu && ProgramsDataGrid.SelectedItem is ProgramStatus status)
+            {
+                // Finde die Menu Items
+                var stopMenuItem = menu.Items.Cast<MenuItem>().FirstOrDefault(m => m.Name == "StopMenuItem");
+                var startMenuItem = menu.Items.Cast<MenuItem>().FirstOrDefault(m => m.Name == "StartMenuItem");
+
+                if (stopMenuItem != null)
+                    stopMenuItem.IsEnabled = status.IsActive;
+
+                if (startMenuItem != null)
+                {
+                    var program = _currentPrograms.FindByProcessName(status.ProcessName);
+                    // Start-MenuItem nur enablen, wenn: nicht aktiv UND StartCommand vorhanden
+                    startMenuItem.IsEnabled = !status.IsActive && program != null && !string.IsNullOrWhiteSpace(program.StartCommand);
+                }
             }
         }
 
@@ -318,16 +376,47 @@ namespace TaskPilot
             {
                 try
                 {
-                    foreach (var proc in Process.GetProcessesByName(status.ProcessName))
+                    var program = _currentPrograms.FindByProcessName(status.ProcessName);
+                    if (program != null)
                     {
-                        proc.Kill();
-                    }
+                        // Versuche zuerst mit gespeicherter PID zu killen
+                        if (program.LastStartedPID > 0)
+                        {
+                            try
+                            {
+                                var proc = Process.GetProcessById(program.LastStartedPID);
+                                proc.Kill();
+                                DebugWindow.Instance?.LogMessage($"✓ Prozess {status.ProcessName} (PID {program.LastStartedPID}) gestoppt");
+                                program.LastStartedPID = 0;
+                            }
+                            catch (Exception ex)
+                            {
+                                DebugWindow.Instance?.LogMessage($"Warnung: PID {program.LastStartedPID} konnte nicht gestoppt werden: {ex.Message}");
+                            }
+                        }
 
-                    StatusText.Text = $"Prozess {status.ProcessName} gestoppt.";
-                    UpdateProgramStatuses();
+                        // Fallback: Alle Prozesse mit diesem Namen stoppen
+                        var allProcs = Process.GetProcessesByName(status.ProcessName);
+                        foreach (var proc in allProcs)
+                        {
+                            try
+                            {
+                                proc.Kill();
+                                DebugWindow.Instance?.LogMessage($"✓ Prozess {proc.ProcessName} (PID {proc.Id}) gestoppt");
+                            }
+                            catch (Exception ex)
+                            {
+                                DebugWindow.Instance?.LogMessage($"Fehler beim Stoppen von {proc.ProcessName}: {ex.Message}");
+                            }
+                        }
+
+                        StatusText.Text = $"Prozess {status.ProcessName} gestoppt.";
+                        UpdateProgramStatuses();
+                    }
                 }
                 catch (Exception ex)
                 {
+                    DebugWindow.Instance?.LogMessage($"✗ Fehler beim Stoppen: {ex.Message}");
                     StatusText.Text = $"Fehler beim Stoppen: {ex.Message}";
                 }
             }
@@ -341,7 +430,7 @@ namespace TaskPilot
                 var program = _currentPrograms.FindByProcessName(status.ProcessName);
                 if (program != null && !string.IsNullOrWhiteSpace(program.StartCommand))
                 {
-                    TryRestartProcess(program, status);
+                    ManualStartProcess(program, status);
                 }
                 else
                 {
@@ -350,7 +439,266 @@ namespace TaskPilot
             }
         }
 
-        private void AutoStartCheckBox_Checked(object sender, RoutedEventArgs e)
+        // Kontextmenü: Prozess minimieren
+        private void MinimizeProcess_Click(object sender, RoutedEventArgs e)
+        {
+            if (ProgramsDataGrid.SelectedItem is ProgramStatus status)
+            {
+                DebugWindow.Instance?.LogMessage($"[MinimizeProcess_Click] Starten für {status.ProcessName}");
+                try
+                {
+                    var program = _currentPrograms.FindByProcessName(status.ProcessName);
+                    DebugWindow.Instance?.LogMessage($"[MinimizeProcess_Click] Program gefunden: {program?.DisplayName}, LastPID: {program?.LastStartedPID}");
+                    int windowCount = 0;
+
+                    // Versuche zuerst, die gespeicherte PID zu verwenden
+                    if (program?.LastStartedPID > 0)
+                    {
+                        DebugWindow.Instance?.LogMessage($"[MinimizeProcess_Click] Versuche gespeicherte PID: {program.LastStartedPID}");
+                        try
+                        {
+                            var proc = Process.GetProcessById(program.LastStartedPID);
+                            DebugWindow.Instance?.LogMessage($"[MinimizeProcess_Click] Prozess gefunden (PID {proc.Id}), MainWindowHandle: {proc.MainWindowHandle}");
+                            if (MinimizeProcessWindow(proc))
+                                windowCount++;
+                        }
+                        catch (Exception ex)
+                        {
+                            // PID existiert nicht mehr, fallback zu ProcessName
+                            DebugWindow.Instance?.LogMessage($"[MinimizeProcess_Click] Fehler bei gespeicherter PID: {ex.Message}");
+                            program.LastStartedPID = 0;
+                        }
+                    }
+
+                    // Fallback: Alle Prozesse mit diesem Namen
+                    if (windowCount == 0)
+                    {
+                        DebugWindow.Instance?.LogMessage($"[MinimizeProcess_Click] Fallback zu ProcessName: {status.ProcessName}");
+                        var allProcs = Process.GetProcessesByName(status.ProcessName);
+                        DebugWindow.Instance?.LogMessage($"[MinimizeProcess_Click] {allProcs.Length} Prozesse mit Namen '{status.ProcessName}' gefunden");
+                        foreach (var proc in allProcs)
+                        {
+                            DebugWindow.Instance?.LogMessage($"[MinimizeProcess_Click] Prozess: {proc.ProcessName} (PID {proc.Id}), MainWindowHandle: {proc.MainWindowHandle}");
+                            if (MinimizeProcessWindow(proc))
+                                windowCount++;
+                        }
+                    }
+
+                    if (windowCount > 0)
+                        StatusText.Text = $"{windowCount} Fenster von {status.ProcessName} minimiert.";
+                    else
+                        StatusText.Text = $"Keine Fenster für {status.ProcessName} gefunden.";
+                }
+                catch (Exception ex)
+                {
+                    DebugWindow.Instance?.LogMessage($"[MinimizeProcess_Click] Exception: {ex.Message}");
+                    StatusText.Text = $"Fehler beim Minimieren: {ex.Message}";
+                }
+            }
+        }
+
+        // Kontextmenü: Prozess in den Vordergrund / maximieren
+        private void MaximizeProcess_Click(object sender, RoutedEventArgs e)
+        {
+            if (ProgramsDataGrid.SelectedItem is ProgramStatus status)
+            {
+                DebugWindow.Instance?.LogMessage($"[MaximizeProcess_Click] Starten für {status.ProcessName}");
+                try
+                {
+                    var program = _currentPrograms.FindByProcessName(status.ProcessName);
+                    DebugWindow.Instance?.LogMessage($"[MaximizeProcess_Click] Program gefunden: {program?.DisplayName}, LastPID: {program?.LastStartedPID}");
+                    int windowCount = 0;
+
+                    // Versuche zuerst, die gespeicherte PID zu verwenden
+                    if (program?.LastStartedPID > 0)
+                    {
+                        DebugWindow.Instance?.LogMessage($"[MaximizeProcess_Click] Versuche gespeicherte PID: {program.LastStartedPID}");
+                        try
+                        {
+                            var proc = Process.GetProcessById(program.LastStartedPID);
+                            DebugWindow.Instance?.LogMessage($"[MaximizeProcess_Click] Prozess gefunden (PID {proc.Id}), MainWindowHandle: {proc.MainWindowHandle}");
+                            if (MaximizeProcessWindow(proc))
+                                windowCount++;
+                        }
+                        catch (Exception ex)
+                        {
+                            // PID existiert nicht mehr, fallback zu ProcessName
+                            DebugWindow.Instance?.LogMessage($"[MaximizeProcess_Click] Fehler bei gespeicherter PID: {ex.Message}");
+                            program.LastStartedPID = 0;
+                        }
+                    }
+
+                    // Fallback: Alle Prozesse mit diesem Namen
+                    if (windowCount == 0)
+                    {
+                        DebugWindow.Instance?.LogMessage($"[MaximizeProcess_Click] Fallback zu ProcessName: {status.ProcessName}");
+                        var allProcs = Process.GetProcessesByName(status.ProcessName);
+                        DebugWindow.Instance?.LogMessage($"[MaximizeProcess_Click] {allProcs.Length} Prozesse mit Namen '{status.ProcessName}' gefunden");
+                        foreach (var proc in allProcs)
+                        {
+                            DebugWindow.Instance?.LogMessage($"[MaximizeProcess_Click] Prozess: {proc.ProcessName} (PID {proc.Id}), MainWindowHandle: {proc.MainWindowHandle}");
+                            if (MaximizeProcessWindow(proc))
+                                windowCount++;
+                        }
+                    }
+
+                    if (windowCount > 0)
+                        StatusText.Text = $"{windowCount} Fenster von {status.ProcessName} in den Vordergrund gebracht.";
+                    else
+                        StatusText.Text = $"Keine Fenster für {status.ProcessName} gefunden.";
+                }
+                catch (Exception ex)
+                {
+                    DebugWindow.Instance?.LogMessage($"[MaximizeProcess_Click] Exception: {ex.Message}");
+                    StatusText.Text = $"Fehler beim Maximieren: {ex.Message}";
+                }
+            }
+        }
+
+        // P/Invoke für Fenstersteuerung
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string lpszClass, string lpszWindow);
+
+        [DllImport("user32.dll")]
+        private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern int GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProcessId);
+
+        // Hilfsmethode: Fenster über Titel finden
+        private IntPtr FindWindowByTitle(string windowTitle)
+        {
+            IntPtr foundWindow = IntPtr.Zero;
+            List<string> foundTitles = new List<string>(); // Debug: alle gefundenen Fenster-Titel
+
+            EnumWindows((hWnd, lParam) =>
+            {
+                StringBuilder sb = new StringBuilder(256);
+                GetWindowText(hWnd, sb, 256);
+                string title = sb.ToString();
+
+                // Debug: alle Fenster-Titel loggen
+                if (!string.IsNullOrWhiteSpace(title))
+                {
+                    foundTitles.Add(title);
+                }
+
+                if (title.Contains(windowTitle))
+                {
+                    foundWindow = hWnd;
+                    return false; // Stop searching
+                }
+                return true;
+            }, IntPtr.Zero);
+
+            // Debug-Ausgabe: alle gefundenen Fenster-Titel (erste 10)
+            DebugWindow.Instance?.LogMessage($"[FindWindowByTitle] Suche nach: '{windowTitle}'");
+            DebugWindow.Instance?.LogMessage($"[FindWindowByTitle] Insgesamt {foundTitles.Count} Fenster gefunden");
+            for (int i = 0; i < Math.Min(10, foundTitles.Count); i++)
+            {
+                DebugWindow.Instance?.LogMessage($"  [{i}] {foundTitles[i]}");
+            }
+
+            return foundWindow;
+        }        private bool MinimizeProcessWindow(Process proc)
+        {
+            const int SW_MINIMIZE = 6;
+            try
+            {
+                proc.Refresh();
+                DebugWindow.Instance?.LogMessage($"[MinimizeProcessWindow] Verarbeite {proc.ProcessName} (PID {proc.Id})");
+                DebugWindow.Instance?.LogMessage($"[MinimizeProcessWindow] MainWindowHandle: {proc.MainWindowHandle} (IsZero: {proc.MainWindowHandle == IntPtr.Zero})");
+
+                if (proc.MainWindowHandle != IntPtr.Zero)
+                {
+                    bool result = ShowWindow(proc.MainWindowHandle, SW_MINIMIZE);
+                    DebugWindow.Instance?.LogMessage($"[MinimizeProcessWindow] ShowWindow-Rückgabe: {result}");
+                    DebugWindow.Instance?.LogMessage($"[MinimizeProcess] Fenster minimiert: {proc.ProcessName} (PID {proc.Id})");
+                    return true;
+                }
+                else
+                {
+                    // Versuche, das Fenster über den Titel zu finden
+                    DebugWindow.Instance?.LogMessage($"[MinimizeProcessWindow] MainWindowHandle ist null - versuche über Fenster-Titel zu suchen");
+                    var windowHandle = FindWindowByTitle(proc.ProcessName);
+
+                    if (windowHandle != IntPtr.Zero)
+                    {
+                        DebugWindow.Instance?.LogMessage($"[MinimizeProcessWindow] Fenster über Titel gefunden!");
+                        bool result = ShowWindow(windowHandle, SW_MINIMIZE);
+                        DebugWindow.Instance?.LogMessage($"[MinimizeProcessWindow] ShowWindow-Rückgabe: {result}");
+                        return true;
+                    }
+                    else
+                    {
+                        DebugWindow.Instance?.LogMessage($"[MinimizeProcessWindow] Fenster auch über Titel nicht gefunden");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Instance?.LogMessage($"[MinimizeProcessWindow] Exception: {ex.GetType().Name}: {ex.Message}");
+            }
+            return false;
+        }
+
+        private bool MaximizeProcessWindow(Process proc)
+        {
+            const int SW_RESTORE = 9;
+            try
+            {
+                proc.Refresh();
+                DebugWindow.Instance?.LogMessage($"[MaximizeProcessWindow] Verarbeite {proc.ProcessName} (PID {proc.Id})");
+                DebugWindow.Instance?.LogMessage($"[MaximizeProcessWindow] MainWindowHandle: {proc.MainWindowHandle} (IsZero: {proc.MainWindowHandle == IntPtr.Zero})");
+
+                if (proc.MainWindowHandle != IntPtr.Zero)
+                {
+                    bool result1 = ShowWindow(proc.MainWindowHandle, SW_RESTORE);
+                    bool result2 = SetForegroundWindow(proc.MainWindowHandle);
+                    DebugWindow.Instance?.LogMessage($"[MaximizeProcessWindow] ShowWindow-Rückgabe: {result1}, SetForegroundWindow-Rückgabe: {result2}");
+                    DebugWindow.Instance?.LogMessage($"[MaximizeProcess] Fenster in Vordergrund: {proc.ProcessName} (PID {proc.Id})");
+                    return true;
+                }
+                else
+                {
+                    // Versuche, das Fenster über den Titel zu finden
+                    DebugWindow.Instance?.LogMessage($"[MaximizeProcessWindow] MainWindowHandle ist null - versuche über Fenster-Titel zu suchen");
+                    var windowHandle = FindWindowByTitle(proc.ProcessName);
+
+                    if (windowHandle != IntPtr.Zero)
+                    {
+                        DebugWindow.Instance?.LogMessage($"[MaximizeProcessWindow] Fenster über Titel gefunden!");
+                        bool result1 = ShowWindow(windowHandle, SW_RESTORE);
+                        bool result2 = SetForegroundWindow(windowHandle);
+                        DebugWindow.Instance?.LogMessage($"[MaximizeProcessWindow] ShowWindow-Rückgabe: {result1}, SetForegroundWindow-Rückgabe: {result2}");
+                        return true;
+                    }
+                    else
+                    {
+                        DebugWindow.Instance?.LogMessage($"[MaximizeProcessWindow] Fenster auch über Titel nicht gefunden");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Instance?.LogMessage($"[MaximizeProcessWindow] Exception: {ex.GetType().Name}: {ex.Message}");
+            }
+            return false;
+        }        private void AutoStartCheckBox_Checked(object sender, RoutedEventArgs e)
         {
             _autoStartEnabled = true;
             DebugWindow.Instance?.LogMessage("[AutoStart] Aktiviert");
@@ -360,6 +708,128 @@ namespace TaskPilot
         {
             _autoStartEnabled = false;
             DebugWindow.Instance?.LogMessage("[AutoStart] Deaktiviert");
+        }
+
+        // Button: Alle Prozesse minimieren
+        private void MinimizeAll_Click(object sender, RoutedEventArgs e)
+        {
+            DebugWindow.Instance?.LogMessage("[MinimizeAll_Click] Starten...");
+            int totalMinimized = 0;
+
+            try
+            {
+                foreach (var status in _programStatuses)
+                {
+                    if (status.IsActive)
+                    {
+                        var program = _currentPrograms.FindByProcessName(status.ProcessName);
+                        DebugWindow.Instance?.LogMessage($"[MinimizeAll_Click] Verarbeite: {status.ProcessName}");
+
+                        int windowCount = 0;
+
+                        // Versuche zuerst, die gespeicherte PID zu verwenden
+                        if (program?.LastStartedPID > 0)
+                        {
+                            try
+                            {
+                                var proc = Process.GetProcessById(program.LastStartedPID);
+                                if (MinimizeProcessWindow(proc))
+                                    windowCount++;
+                            }
+                            catch (Exception ex)
+                            {
+                                DebugWindow.Instance?.LogMessage($"[MinimizeAll_Click] Fehler bei PID {program?.LastStartedPID}: {ex.Message}");
+                            }
+                        }
+
+                        // Fallback: Alle Prozesse mit diesem Namen
+                        if (windowCount == 0)
+                        {
+                            var allProcs = Process.GetProcessesByName(status.ProcessName);
+                            foreach (var proc in allProcs)
+                            {
+                                if (MinimizeProcessWindow(proc))
+                                    windowCount++;
+                            }
+                        }
+
+                        totalMinimized += windowCount;
+                    }
+                }
+
+                StatusText.Text = $"✓ {totalMinimized} Fenster minimiert.";
+                DebugWindow.Instance?.LogMessage($"[MinimizeAll_Click] Abgeschlossen: {totalMinimized} Fenster minimiert");
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"Fehler beim Minimieren: {ex.Message}";
+                DebugWindow.Instance?.LogMessage($"[MinimizeAll_Click] Exception: {ex.Message}");
+            }
+        }
+
+        // Button: Alle Prozesse maximieren / in den Vordergrund
+        private void MaximizeAll_Click(object sender, RoutedEventArgs e)
+        {
+            DebugWindow.Instance?.LogMessage("[MaximizeAll_Click] Starten...");
+            int totalMaximized = 0;
+
+            try
+            {
+                foreach (var status in _programStatuses)
+                {
+                    if (status.IsActive)
+                    {
+                        var program = _currentPrograms.FindByProcessName(status.ProcessName);
+                        DebugWindow.Instance?.LogMessage($"[MaximizeAll_Click] Verarbeite: {status.ProcessName}");
+
+                        int windowCount = 0;
+
+                        // Versuche zuerst, die gespeicherte PID zu verwenden
+                        if (program?.LastStartedPID > 0)
+                        {
+                            try
+                            {
+                                var proc = Process.GetProcessById(program.LastStartedPID);
+                                if (MaximizeProcessWindow(proc))
+                                    windowCount++;
+                            }
+                            catch (Exception ex)
+                            {
+                                DebugWindow.Instance?.LogMessage($"[MaximizeAll_Click] Fehler bei PID {program?.LastStartedPID}: {ex.Message}");
+                            }
+                        }
+
+                        // Fallback: Alle Prozesse mit diesem Namen
+                        if (windowCount == 0)
+                        {
+                            var allProcs = Process.GetProcessesByName(status.ProcessName);
+                            foreach (var proc in allProcs)
+                            {
+                                if (MaximizeProcessWindow(proc))
+                                    windowCount++;
+                            }
+                        }
+
+                        totalMaximized += windowCount;
+                    }
+                }
+
+                StatusText.Text = $"✓ {totalMaximized} Fenster in den Vordergrund gebracht.";
+                DebugWindow.Instance?.LogMessage($"[MaximizeAll_Click] Abgeschlossen: {totalMaximized} Fenster maximiert");
+
+                // Bringe TaskPilot selbst in den Vordergrund
+                Dispatcher.Invoke(() =>
+                {
+                    this.Activate();
+                    this.Focus();
+                    SetForegroundWindow(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+                });
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"Fehler beim Maximieren: {ex.Message}";
+                DebugWindow.Instance?.LogMessage($"[MaximizeAll_Click] Exception: {ex.Message}");
+            }
         }
     }
 }
