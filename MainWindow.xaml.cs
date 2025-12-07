@@ -121,7 +121,7 @@ namespace TaskPilot
 
                 DebugWindow.Instance?.LogMessage($"[UpdateProgramStatuses] Fertig - {inactiveCount} inaktive Prozesse geprüft");
                 ProgramCountText.Text = $"{_programStatuses.Count} Programme überwacht";
-                LastUpdateText.Text = $"Letzte Aktualisierung: {DateTime.Now:HH:mm:ss}";
+                LastUpdateText.Text = $"Letzte Aktualisierung: {DateTime.Now:dd.MM.yyyy HH:mm:ss}";
             });
         }        private void OnStatusChanged(object? sender, ProgramStatus status)
         {

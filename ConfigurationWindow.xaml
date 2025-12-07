@@ -25,20 +25,37 @@
         </Border>
 
         <!-- Filter -->
-        <Border Grid.Row="1" Background="White" Padding="20" BorderBrush="#DDDDDD" BorderThickness="0,1,0,1">
-            <StackPanel>
-                <TextBlock Text="Prozesse filtern:" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                <TextBox x:Name="FilterTextBox"
-                         Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
-                         Padding="10,8"
-                         Background="White"
-                         BorderBrush="#CCCCCC"
-                         BorderThickness="1"
-                         Foreground="#333"
-                         FontSize="12"/>
-                <TextBlock Text="Tipp: Nutzen Sie * (beliebig viele Zeichen) oder ? (ein Zeichen) für Wildcard-Suche"
-                           FontSize="10" Foreground="#666" Margin="0,5,0,0"/>
-            </StackPanel>
+        <Border Grid.Row="1" Background="White" Padding="15,10" BorderBrush="#DDDDDD" BorderThickness="0,1,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Filterbox -->
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Prozesse filtern:" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,3"/>
+                    <TextBox x:Name="FilterTextBox"
+                             Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                             Padding="8,5"
+                             Background="White"
+                             BorderBrush="#CCCCCC"
+                             BorderThickness="1"
+                             Foreground="#333"
+                             FontSize="11"
+                             Height="28"/>
+                </StackPanel>
+
+                <!-- Buttons in einer Zeile, links ausgerichtet -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="15,0,0,0">
+                    <Button Content="Neuer Prozess" Click="AddSingleProcess_Click" Padding="12,6" Background="#2196F3" Foreground="White" FontWeight="SemiBold" FontSize="11" Margin="0,0,8,0"/>
+                    <Button Content="Alle Überwachen" Click="SetAllMonitored_Click" Padding="12,6" Background="#4CAF50" Foreground="White" FontWeight="SemiBold" FontSize="11" Margin="0,0,8,0"/>
+                    <Button Content="Überwachen aus" Click="ClearAllMonitored_Click" Padding="12,6" Background="#D32F2F" Foreground="White" FontWeight="SemiBold" FontSize="11" Margin="0,0,8,0"/>
+                    <Button Content="Alle AutoStart" Click="SetAllAutostart_Click" Padding="12,6" Background="#FF5722" Foreground="White" FontWeight="SemiBold" FontSize="11" Margin="0,0,8,0"/>
+                    <Button Content="AutoStart aus" Click="ClearAllAutostart_Click" Padding="12,6" Background="#E64A19" Foreground="White" FontWeight="SemiBold" FontSize="11" Margin="0,0,8,0"/>
+                    <Button Content="Hilfe" Click="ShowHelp_Click" Padding="12,6" Background="#FF9800" Foreground="White" FontWeight="SemiBold" FontSize="11"/>
+                </StackPanel>
+            </Grid>
         </Border>
 
         <!-- Prozessliste -->
@@ -57,17 +74,23 @@
 
             <DataGrid.Columns>
                 <DataGridCheckBoxColumn Header="Überwachen" Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="80" IsReadOnly="False"/>
-                <DataGridTextColumn Header="Programmname" Binding="{Binding DisplayName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="*" IsReadOnly="False"/>
-                <DataGridTextColumn Header="Prozessname" Binding="{Binding ProcessName}" Width="160" IsReadOnly="True"/>
-                <DataGridTextColumn Header="Beschreibung" Binding="{Binding Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="200" IsReadOnly="False"/>
-                <DataGridCheckBoxColumn Header="Auto-Restart" Binding="{Binding AutoRestart, Mode=TwoWay}" Width="100" IsReadOnly="False"/>
-                <DataGridTextColumn Header="Startbefehl" Binding="{Binding StartCommand, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="220" IsReadOnly="False"/>
-                <DataGridTemplateColumn Header="Aktion" Width="170">
+                <DataGridTextColumn Header="Programmname" Binding="{Binding DisplayName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="150" IsReadOnly="False"/>
+                <DataGridTextColumn Header="Prozessname" Binding="{Binding ProcessName}" Width="120" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Beschreibung" Binding="{Binding Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="120" IsReadOnly="False"/>
+                <DataGridCheckBoxColumn Header="Auto-Restart" Binding="{Binding AutoRestart, Mode=TwoWay}" Width="90" IsReadOnly="False"/>
+                <DataGridTextColumn Header="Startbefehl" Binding="{Binding StartCommand, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="*" IsReadOnly="False"/>
+                <DataGridTemplateColumn Header="Aktion" Width="60">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                <Button Content="Bearbeiten" Click="EditProcess_Click" Padding="8,5" Margin="0,0,5,0" Background="#2196F3" Foreground="White" FontSize="11" FontWeight="SemiBold"/>
-                                <Button Content="Löschen" Click="DeleteProcess_Click" Padding="8,5" Background="#F44336" Foreground="White" FontSize="11" FontWeight="SemiBold"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <!-- Bearbeiten Button mit Stift-Symbol -->
+                                <Button Click="EditProcess_Click" Padding="4,2" Margin="0,0,4,0" Background="#2196F3" Foreground="White" FontSize="10" FontWeight="Bold" Width="20" Height="20" ToolTip="Bearbeiten">
+                                    <TextBlock Text="✎" TextAlignment="Center" VerticalAlignment="Center"/>
+                                </Button>
+                                <!-- Löschen Button mit Mülleimer-Symbol -->
+                                <Button Click="DeleteProcess_Click" Padding="4,2" Background="#F44336" Foreground="White" FontSize="10" FontWeight="Bold" Width="20" Height="20" ToolTip="Löschen">
+                                    <TextBlock Text="🗑" TextAlignment="Center" VerticalAlignment="Center"/>
+                                </Button>
                             </StackPanel>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
@@ -76,21 +99,19 @@
         </DataGrid>
 
         <!-- Footer mit Buttons -->
-        <Border Grid.Row="3" Background="White" Padding="20" BorderBrush="#DDDDDD" BorderThickness="0,1,0,0">
-            <StackPanel>
-                <!-- Erste Zeile: Funktionsbuttons -->
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,10">
-                    <Button Content="Neuer Prozess" Click="AddSingleProcess_Click" Padding="15,8" Background="#2196F3" Foreground="White" FontWeight="SemiBold" Margin="0,0,10,0"/>
-                    <Button Content="Alle aktivieren" Click="SelectAll_Click" Padding="15,8" Background="#4CAF50" Foreground="White" FontWeight="SemiBold" Margin="0,0,10,0"/>
-                    <Button Content="Hilfe" Click="ShowHelp_Click" Padding="15,8" Background="#FF9800" Foreground="White" FontWeight="SemiBold"/>
-                </StackPanel>
+        <Border Grid.Row="3" Background="White" Padding="15,10" BorderBrush="#DDDDDD" BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-                <!-- Zweite Zeile: Schließen und Übernehmen -->
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button Content="Schließen" Click="Cancel_Click" Padding="20,10" Margin="0,0,10,0" Background="#9E9E9E" Foreground="White" FontWeight="SemiBold" Width="120"/>
-                    <Button Content="Übernehmen" Click="Apply_Click" Padding="20,10" Background="#4CAF50" Foreground="White" FontWeight="SemiBold" Width="120"/>
+                <!-- Rechts ausgerichtete Buttons -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="Schließen" Click="Cancel_Click" Padding="15,6" Margin="0,0,8,0" Background="#9E9E9E" Foreground="White" FontWeight="SemiBold" FontSize="11" Width="100"/>
+                    <Button Content="Übernehmen" Click="Apply_Click" Padding="15,6" Background="#4CAF50" Foreground="White" FontWeight="SemiBold" FontSize="11" Width="100"/>
                 </StackPanel>
-            </StackPanel>
+            </Grid>
         </Border>
     </Grid>
 </Window>

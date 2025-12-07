@@ -95,7 +95,7 @@
                 <DataGridTextColumn Header="Prozessname" Binding="{Binding ProcessName}" Width="200"/>
                 <DataGridTextColumn Header="PID" Binding="{Binding ProcessID}" Width="80"/>
                 <DataGridTextColumn Header="Zustand" Binding="{Binding StatusText}" Width="120"/>
-                <DataGridTextColumn Header="Seit" Binding="{Binding StatusSince}" Width="150"/>
+                <DataGridTextColumn Header="Seit" Binding="{Binding StatusSince, StringFormat='dd.MM.yyyy HH:mm:ss'}" Width="150"/>
             </DataGrid.Columns>
         </DataGrid>
 

@@ -27,17 +27,102 @@ namespace TaskPilot
             DialogHelper.ShowConfigurationReloaded();
         }
 
-        private void SelectAll_Click(object sender, RoutedEventArgs e)
-        {
-            _viewModel?.SelectAllFiltered();
-        }
-
         private void DeselectAll_Click(object sender, RoutedEventArgs e)
         {
             var result = DialogHelper.AskRemoveAllProcesses();
             if (result == MessageBoxResult.Yes)
             {
                 _viewModel?.DeselectAll();
+            }
+        }
+
+        private void SetAllMonitored_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_viewModel?.AvailableProcesses == null)
+                    return;
+
+                // Setze alle IsSelected zu true
+                foreach (var process in _viewModel.AvailableProcesses)
+                {
+                    process.IsSelected = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                DialogHelper.ShowOperationError("Setzen aller Überwachen-Checkboxen", ex.Message);
+            }
+        }
+
+        private void SetAllAutostart_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_viewModel?.AvailableProcesses == null)
+                    return;
+
+                // Validiere zuerst: Alle Prozesse mit AutoRestart müssen einen StartCommand haben
+                var processesWithoutCommand = _viewModel.AvailableProcesses
+                    .Where(p => string.IsNullOrWhiteSpace(p.StartCommand))
+                    .ToList();
+
+                if (processesWithoutCommand.Count > 0)
+                {
+                    var programList = string.Join("\n• ", processesWithoutCommand.Select(p => p.DisplayName));
+                    DialogHelper.ShowValidationError(
+                        $"Folgende Programme haben keinen Startbefehl definiert:\n\n• {programList}\n\n" +
+                        $"Bitte definieren Sie zuerst Startbefehle für diese Programme.");
+                    return;
+                }
+
+                // Setze alle AutoRestart zu true
+                foreach (var process in _viewModel.AvailableProcesses)
+                {
+                    process.AutoRestart = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                DialogHelper.ShowOperationError("Setzen aller AutoStart-Checkboxen", ex.Message);
+            }
+        }
+
+        private void ClearAllMonitored_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_viewModel?.AvailableProcesses == null)
+                    return;
+
+                // Deaktiviere alle IsSelected
+                foreach (var process in _viewModel.AvailableProcesses)
+                {
+                    process.IsSelected = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                DialogHelper.ShowOperationError("Deaktivieren aller Überwachen-Checkboxen", ex.Message);
+            }
+        }
+
+        private void ClearAllAutostart_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_viewModel?.AvailableProcesses == null)
+                    return;
+
+                // Deaktiviere alle AutoRestart
+                foreach (var process in _viewModel.AvailableProcesses)
+                {
+                    process.AutoRestart = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                DialogHelper.ShowOperationError("Deaktivieren aller AutoStart-Checkboxen", ex.Message);
             }
         }
 
