@@ -312,6 +312,23 @@ namespace TaskPilot
             }
         }
 
+        private void ShowHelp_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var helpWindow = new HelpWindow()
+                {
+                    Owner = this
+                };
+
+                helpWindow.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                DialogHelper.ShowOperationError("Hilfe öffnen", ex.Message);
+            }
+        }
+
         private void EditConfig_Click(object sender, RoutedEventArgs e)
         {
             try

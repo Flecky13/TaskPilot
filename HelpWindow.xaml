@@ -1,7 +1,7 @@
 <Window x:Class="TaskPilot.HelpWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="TaskPilot - Hilfe: StartCommand"
+        Title="TaskPilot - Hilfe &amp; Info"
         Height="600" Width="800"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize"
@@ -16,46 +16,52 @@
 
         <!-- Header -->
         <Border Grid.Row="0" Background="#2196F3" Padding="15">
-            <TextBlock Text="Hilfe: StartCommand Syntax" FontSize="16" FontWeight="Bold" Foreground="White"/>
+            <StackPanel>
+                <TextBlock Text="TaskPilot - Hilfe &amp; Info" FontSize="16" FontWeight="Bold" Foreground="White"/>
+                <TextBlock Text="Kurzanleitung, Kontakt &amp; Updates" FontSize="12" Foreground="#E3F2FD"/>
+            </StackPanel>
         </Border>
 
         <!-- Content -->
         <ScrollViewer Grid.Row="1" Padding="20">
             <StackPanel>
-                <TextBlock Text="StartCommand - Beispiele und Syntax" FontSize="14" FontWeight="Bold" Margin="0,0,0,15"/>
+                <!-- Version & Update-Status -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <TextBlock Text="Version:" FontWeight="SemiBold" Margin="0,0,8,0"/>
+                    <TextBlock x:Name="CurrentVersionText" Text="-"/>
+                    <TextBlock Text="  |  " Margin="8,0,8,0"/>
+                    <TextBlock x:Name="UpdateStatusText" Text="Status unbekannt" Foreground="#555"/>
+                    <Button Content="Jetzt prüfen" Click="CheckUpdates_Click" Padding="10,4" Margin="12,0,0,0" Background="#1976D2" Foreground="White"/>
+                    <Button x:Name="InstallNowButton" Content="Download &amp; Installieren" Click="InstallNow_Click" Padding="10,4" Margin="8,0,0,0" Background="#2E7D32" Foreground="White" IsEnabled="False"/>
+                </StackPanel>
+                <TextBlock Text="Über TaskPilot" FontSize="14" FontWeight="Bold" Margin="0,0,0,8"/>
+                <TextBlock Text="TaskPilot überwacht ausgewählte Programme, kann sie bei Bedarf neu starten und bietet schnelle Steuerung über Kontextmenü und Buttons." TextWrapping="Wrap" Margin="0,0,0,12"/>
 
-                <TextBlock Text="1. Einfache Programme (ohne Parameter)" FontSize="12" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,10"/>
-                <Border Background="Black" Padding="10" CornerRadius="4" Margin="0,0,0,15">
-                    <TextBlock Text="notepad.exe&#x0a;explorer.exe&#x0a;cmd.exe" Foreground="#00FF00" FontFamily="Consolas" FontSize="11"/>
-                </Border>
+                <TextBlock Text="Schnellstart" FontSize="13" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,6"/>
+                <StackPanel Margin="15,0,0,12">
+                    <TextBlock Text="1) Öffne Konfiguration, füge Programme hinzu (ProcessName, StartCommand)." TextWrapping="Wrap"/>
+                    <TextBlock Text="2) Checkbox 'Überwachen' aktivieren, bei Bedarf 'AutoStart'." TextWrapping="Wrap"/>
+                    <TextBlock Text="3) Übernehmen klicken – TaskPilot überwacht und steuert die Prozesse." TextWrapping="Wrap"/>
+                </StackPanel>
 
-                <TextBlock Text="2. Programmes mit Dateipfad" FontSize="12" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,10"/>
-                <Border Background="Black" Padding="10" CornerRadius="4" Margin="0,0,0,15">
-                    <TextBlock Text="C:\Program Files\App\app.exe&#x0a;Simulation\01AS01.exe" Foreground="#00FF00" FontFamily="Consolas" FontSize="11"/>
-                </Border>
+                <TextBlock Text="StartCommand kurz" FontSize="13" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,6"/>
+                <StackPanel Margin="15,0,0,12">
+                    <TextBlock Text="• Einfache Programme: notepad.exe" TextWrapping="Wrap"/>
+                    <TextBlock Text="• Mit Pfad: C:\\Program Files\\App\\app.exe" TextWrapping="Wrap"/>
+                    <TextBlock Text="• Mit Parametern: start &quot;Titel&quot; /min C:\\App\\app.exe arg1" TextWrapping="Wrap"/>
+                    <TextBlock Text="• Bei Leerzeichen Pfade in &quot;&quot; setzen." TextWrapping="Wrap"/>
+                </StackPanel>
 
-                <TextBlock Text="3. Programme mit Parametern (verwende &quot;start&quot; Command)" FontSize="12" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,10"/>
-                <Border Background="Black" Padding="10" CornerRadius="4" Margin="0,0,0,15">
-                    <TextBlock Text="start &quot;Fenster Titel&quot; /min C:\App\app.exe param1 param2&#x0a;start &quot;SBG Academy&quot; /min Simulation\01AS01.exe FSD=&quot;config.xml&quot;" Foreground="#00FF00" FontFamily="Consolas" FontSize="11"/>
-                </Border>
+                <TextBlock Text="Über mich" FontSize="13" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,6"/>
+                <StackPanel Margin="15,0,0,12">
+                    <TextBlock Text="Autor: Flecky13" TextWrapping="Wrap"/>
+                    <TextBlock Text="E-Mail: github@hometepe.de" TextWrapping="Wrap"/>
+                    <TextBlock Text="Projekt: https://github.com/Flecky13/TaskPilot" TextWrapping="Wrap"/>
+                </StackPanel>
 
-                <TextBlock Text="4. Komplexes Beispiel (mit mehreren Parametern)" FontSize="12" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,10"/>
-                <Border Background="Black" Padding="10" CornerRadius="4" Margin="0,0,0,15">
-                    <TextBlock Text="start &quot;SBG Academy - 01AS01&quot; /min cmd /c Simulation\01AS01.exe FSD=&quot;Simulation\Settings\px01AS01\PXC200-E.D.xml&quot; ASS=&quot;Simulation\Settings\px01AS01\ASSettings.xml&quot; ASC=&quot;Simulation\Settings\px01AS01\ASContext.xml&quot; DID=&quot;01AS01&quot;" Foreground="#00FF00" FontFamily="Consolas" FontSize="10" TextWrapping="Wrap"/>
-                </Border>
-
-                <TextBlock Text="Oder vereinfacht (besser):" FontSize="11" FontWeight="Bold" Foreground="#FF6F00" Margin="0,10,0,5"/>
-                <Border Background="Black" Padding="10" CornerRadius="4" Margin="0,0,0,20">
-                    <TextBlock Text="start &quot;SBG Academy - 01AS01&quot; /min Simulation\01AS01.exe FSD=&quot;Simulation\Settings\px01AS01\PXC200-E.D.xml&quot; ASS=&quot;Simulation\Settings\px01AS01\ASSettings.xml&quot; ASC=&quot;Simulation\Settings\px01AS01\ASContext.xml&quot; DID=&quot;01AS01&quot;" Foreground="#00FF00" FontFamily="Consolas" FontSize="10" TextWrapping="Wrap"/>
-                </Border>
-
-                <TextBlock Text="Wichtige Hinweise:" FontSize="12" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,10"/>
-                <StackPanel Margin="20,0,0,0">
-                    <TextBlock Text="• Verwenden Sie relative oder absolute Pfade" Margin="0,5,0,0" TextWrapping="Wrap"/>
-                    <TextBlock Text="• Bei Pfaden mit Leerzeichen: Anführungszeichen (&quot;) verwenden" Margin="0,5,0,0" TextWrapping="Wrap"/>
-                    <TextBlock Text="• Start-Command kann mit &quot;start&quot; beginnen für Fenster-Optionen (/min, /max, etc.)" Margin="0,5,0,0" TextWrapping="Wrap"/>
-                    <TextBlock Text="• TaskPilot erkennt automatisch das Format und führt es korrekt aus" Margin="0,5,0,0" TextWrapping="Wrap"/>
-                    <TextBlock Text="• Nach Änderungen: Debug-Konsole öffnen und Prozess testen" Margin="0,5,0,0" TextWrapping="Wrap"/>
+                <TextBlock Text="Updates" FontSize="13" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,6"/>
+                <StackPanel Margin="15,0,0,0">
+                    <TextBlock Text="Der Update-Check vergleicht die lokale Version mit der neuesten GitHub-Release." TextWrapping="Wrap"/>
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>
@@ -63,6 +69,7 @@
         <!-- Footer -->
         <Border Grid.Row="2" Background="White" Padding="15" BorderBrush="#DDDDDD" BorderThickness="0,1,0,0">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Release-Seite öffnen" Click="OpenReleases_Click" Padding="16,10" Margin="0,0,10,0" Background="#1976D2" Foreground="White" FontWeight="SemiBold"/>
                 <Button Content="Schließen" Click="Close_Click" Padding="20,10" Background="#9E9E9E" Foreground="White" FontWeight="SemiBold"/>
             </StackPanel>
         </Border>

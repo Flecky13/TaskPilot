@@ -129,6 +129,7 @@
                     <Button Content="Alle minimieren" Click="MinimizeAll_Click" Padding="12,6" Margin="0,0,8,0" Background="#4CAF50" Foreground="White" FontWeight="SemiBold"/>
                     <Button Content="Alle maximieren" Click="MaximizeAll_Click" Padding="12,6" Margin="0,0,8,0" Background="#4CAF50" Foreground="White" FontWeight="SemiBold"/>
                     <Button Content="Debug-Konsole" Click="ShowDebug_Click" Padding="15,6" Margin="0,0,8,0" Background="#FF9800" Foreground="White" FontWeight="SemiBold"/>
+                    <Button Content="Hilfe" Click="ShowHelp_Click" Padding="12,6" Margin="0,0,8,0" Background="#2196F3" Foreground="White" FontWeight="SemiBold"/>
                     <Button Content="Aktualisieren" Click="Refresh_Click" Padding="15,6" Margin="0,0,8,0"/>
                     <Button Content="Konfiguration bearbeiten" Click="EditConfig_Click" Padding="15,6"/>
                 </StackPanel>
