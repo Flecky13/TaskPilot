@@ -11,6 +11,12 @@ namespace TaskPilot
     /// </summary>
     public static class IniConfigReader
     {
+        public class ServerSettings
+        {
+            public int Port { get; set; } = 5110;
+            public bool Enabled { get; set; } = true;
+        }
+
         public static List<MonitoredProgram> ReadConfiguration(string filePath)
         {
             var programs = new List<MonitoredProgram>();
@@ -23,6 +29,7 @@ namespace TaskPilot
 
             var lines = File.ReadAllLines(filePath, Encoding.UTF8);
             MonitoredProgram? currentProgram = null;
+            bool skipSection = false; // true wenn wir in [Server] sind
 
             foreach (var line in lines)
             {
@@ -35,12 +42,23 @@ namespace TaskPilot
                 // Sektion: [ProgramName]
                 if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
                 {
-                    if (currentProgram != null)
+                    // Vorherige Sektion abschließen, falls sie kein Server war
+                    if (currentProgram != null && !skipSection)
                     {
                         programs.Add(currentProgram);
                     }
 
                     var sectionName = trimmedLine.Substring(1, trimmedLine.Length - 2);
+
+                    // Server-Sektion überspringen
+                    if (sectionName.Equals("Server", StringComparison.OrdinalIgnoreCase))
+                    {
+                        skipSection = true;
+                        currentProgram = null;
+                        continue;
+                    }
+
+                    skipSection = false;
                     currentProgram = new MonitoredProgram
                     {
                         DisplayName = sectionName,
@@ -48,7 +66,7 @@ namespace TaskPilot
                     };
                 }
                 // Key=Value Paare
-                else if (trimmedLine.Contains("=") && currentProgram != null)
+                else if (trimmedLine.Contains("=") && currentProgram != null && !skipSection)
                 {
                     var parts = trimmedLine.Split(new[] { '=' }, 2);
                     var key = parts[0].Trim().ToLowerInvariant();
@@ -80,7 +98,7 @@ namespace TaskPilot
             }
 
             // Letztes Programm hinzufügen
-            if (currentProgram != null)
+            if (currentProgram != null && !skipSection)
             {
                 programs.Add(currentProgram);
             }
@@ -88,10 +106,62 @@ namespace TaskPilot
             return programs;
         }
 
+        public static ServerSettings ReadServerSettings(string filePath)
+        {
+            var settings = new ServerSettings();
+
+            if (!File.Exists(filePath))
+            {
+                return settings;
+            }
+
+            var lines = File.ReadAllLines(filePath, Encoding.UTF8);
+            bool inServerSection = false;
+
+            foreach (var line in lines)
+            {
+                var trimmed = line.Trim();
+                if (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith(";") || trimmed.StartsWith("#"))
+                    continue;
+
+                if (trimmed.StartsWith("[") && trimmed.EndsWith("]"))
+                {
+                    inServerSection = trimmed.Equals("[Server]", StringComparison.OrdinalIgnoreCase);
+                    continue;
+                }
+
+                if (!inServerSection || !trimmed.Contains("="))
+                    continue;
+
+                var parts = trimmed.Split(new[] { '=' }, 2);
+                var key = parts[0].Trim().ToLowerInvariant();
+                var value = parts[1].Trim();
+
+                switch (key)
+                {
+                    case "port":
+                        if (int.TryParse(value, out var port) && port > 0 && port <= 65535)
+                            settings.Port = port;
+                        break;
+                    case "enabled":
+                        settings.Enabled = value.Equals("true", StringComparison.OrdinalIgnoreCase);
+                        break;
+                }
+            }
+
+            return settings;
+        }
+
         private static void CreateDefaultConfiguration(string filePath)
         {
             var defaultConfig = @"; TaskPilot Konfigurationsdatei
 ;
+; Globale Server-Einstellungen
+[Server]
+Port=5110
+Enabled=true
+
+; Programme:
 ; Format:
 ; [Anzeigename]
 ; ProcessName=prozessname (ohne .exe)
@@ -131,7 +201,7 @@ Description=Windows Rechner
             File.WriteAllText(filePath, defaultConfig, Encoding.UTF8);
         }
 
-        public static void SaveConfiguration(string filePath, List<MonitoredProgram> programs, bool appendMode = false)
+        public static void SaveConfiguration(string filePath, List<MonitoredProgram> programs, ServerSettings? serverSettings = null, bool appendMode = false)
         {
             if (appendMode && File.Exists(filePath))
             {
@@ -166,9 +236,16 @@ Description=Windows Rechner
             else
             {
                 // Normalmodus: Überschreibe die gesamte Datei
+                var settingsToWrite = serverSettings ?? ReadServerSettings(filePath);
                 var sb = new StringBuilder();
                 sb.AppendLine("; TaskPilot Konfigurationsdatei");
                 sb.AppendLine("; Generiert am: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+                sb.AppendLine();
+
+                // Globale Server-Einstellungen
+                sb.AppendLine("[Server]");
+                sb.AppendLine($"Port={settingsToWrite.Port}");
+                sb.AppendLine($"Enabled={(settingsToWrite.Enabled ? "true" : "false")}");
                 sb.AppendLine();
 
                 foreach (var program in programs)

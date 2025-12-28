@@ -10,13 +10,15 @@ namespace TaskPilot
     {
         private ConfigurationWindowViewModel? _viewModel;
         private string _configFilePath;
+        private IniConfigReader.ServerSettings _serverSettings;
 
-        public ConfigurationWindow(string configFilePath, List<MonitoredProgram> monitoredPrograms)
+        public ConfigurationWindow(string configFilePath, List<MonitoredProgram> monitoredPrograms, IniConfigReader.ServerSettings serverSettings)
         {
             InitializeComponent();
 
             _configFilePath = configFilePath;
-            _viewModel = new ConfigurationWindowViewModel(monitoredPrograms);
+            _serverSettings = serverSettings;
+            _viewModel = new ConfigurationWindowViewModel(monitoredPrograms, _serverSettings);
             DataContext = _viewModel;
         }
 
@@ -157,7 +159,8 @@ namespace TaskPilot
                 {
                     // Neu laden der INI nach dem Hinzufügen
                     var updatedPrograms = IniConfigReader.ReadConfiguration(_configFilePath);
-                    _viewModel = new ConfigurationWindowViewModel(updatedPrograms);
+                    _serverSettings = IniConfigReader.ReadServerSettings(_configFilePath);
+                    _viewModel = new ConfigurationWindowViewModel(updatedPrograms, _serverSettings);
                     DataContext = _viewModel;
                     DialogHelper.ShowNewProcessesLoaded();
                 }
@@ -198,7 +201,8 @@ namespace TaskPilot
 
                     // Neu laden der ViewModel
                     var updatedPrograms = IniConfigReader.ReadConfiguration(_configFilePath);
-                    _viewModel = new ConfigurationWindowViewModel(updatedPrograms);
+                    _serverSettings = IniConfigReader.ReadServerSettings(_configFilePath);
+                    _viewModel = new ConfigurationWindowViewModel(updatedPrograms, _serverSettings);
                     DataContext = _viewModel;
 
                     DialogHelper.ShowNewProcessAdded(newProgram.DisplayName);
@@ -268,7 +272,8 @@ namespace TaskPilot
 
                         // Speichere sofort in der INI
                         var allPrograms = _viewModel?.GetAllPrograms() ?? new List<MonitoredProgram>();
-                        IniConfigReader.SaveConfiguration(_configFilePath, allPrograms);
+                        var currentSettings = _viewModel?.GetServerSettings() ?? _serverSettings;
+                        IniConfigReader.SaveConfiguration(_configFilePath, allPrograms, currentSettings);
 
                         DialogHelper.ShowInfo($"Der Prozess \"{editWindow.DisplayName}\" wurde erfolgreich aktualisiert.");
                     }
@@ -307,8 +312,17 @@ namespace TaskPilot
                     return;
                 }
 
-                // Speichere ALLE Programme in die INI
-                IniConfigReader.SaveConfiguration(_configFilePath, allPrograms);
+                var serverSettings = _viewModel?.GetServerSettings() ?? _serverSettings;
+
+                // Validierung Server-Port
+                if (serverSettings.Port <= 0 || serverSettings.Port > 65535)
+                {
+                    DialogHelper.ShowValidationError("Bitte einen gültigen Port zwischen 1 und 65535 eingeben.");
+                    return;
+                }
+
+                // Speichere ALLE Programme + Server-Einstellungen in die INI
+                IniConfigReader.SaveConfiguration(_configFilePath, allPrograms, serverSettings);
 
                 // Zähle nur die überwachten für die Meldung
                 var monitoredCount = allPrograms.Count(p => p.IsSelected);
@@ -317,6 +331,7 @@ namespace TaskPilot
                 // Main-Window sofort aktualisieren, damit Änderungen direkt sichtbar sind
                 if (Owner is MainWindow mainWindow)
                 {
+                    mainWindow.ApplyServerSettings(serverSettings);
                     mainWindow.ReloadConfiguration();
                 }
 

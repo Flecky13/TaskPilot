@@ -18,6 +18,7 @@ namespace TaskPilot
         private static bool _initialized;
         private static Timer? _snapshotTimer;
         private static bool _hubContextReady = false; // Flag um zu überprüfen ob HubContext bereit ist
+        private static Task? _runTask;
 
         public static void NotifyAutoStartChanged(bool enabled)
         {
@@ -55,17 +56,18 @@ namespace TaskPilot
             _initialized = true;
 
             var builder = WebApplication.CreateBuilder();
-            builder.WebHost.UseKestrel().UseUrls($"http://localhost:{port}");
+            // Binde auf alle Interfaces, damit Zugriff auch übers Netzwerk möglich ist
+            builder.WebHost.UseKestrel().UseUrls($"http://0.0.0.0:{port}");
 
             builder.Services.AddSingleton(monitor);
             builder.Services.AddSignalR();
             builder.Services.AddCors(options =>
             {
+                // Für LAN-Zugriff: Alle Origins zulassen (keine Credentials genutzt)
                 options.AddDefaultPolicy(policy =>
-                    policy.WithOrigins("http://localhost:5110")
+                    policy.AllowAnyOrigin()
                           .AllowAnyHeader()
-                          .AllowAnyMethod()
-                          .AllowCredentials());
+                          .AllowAnyMethod());
             });
 
             _app = builder.Build();
@@ -294,7 +296,42 @@ namespace TaskPilot
             });
 
             System.Diagnostics.Debug.WriteLine($"[WebServer] Starting on port {port}...");
-            _ = _app.RunAsync();
+            _runTask = _app.RunAsync();
+        }
+
+        public static async Task StopAsync()
+        {
+            try
+            {
+                _snapshotTimer?.Dispose();
+                _snapshotTimer = null;
+
+                if (_app != null)
+                {
+                    await _app.StopAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[WebServer] StopAsync error: {ex.Message}");
+            }
+            finally
+            {
+                _app = null;
+                _hubContext = null;
+                _hubContextReady = false;
+                _initialized = false;
+                _runTask = null;
+            }
+        }
+
+        public static async Task RestartAsync(ProcessMonitor monitor, int port, bool enabled)
+        {
+            await StopAsync();
+            if (enabled)
+            {
+                Start(monitor, port);
+            }
         }
 
         private class AutoStartRequest

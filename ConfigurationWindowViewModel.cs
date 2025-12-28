@@ -17,6 +17,8 @@ namespace TaskPilot
         private List<ConfigurableProcess> _allProcesses;
         private string _filterText = string.Empty;
         private List<MonitoredProgram> _originalMonitoredPrograms;
+        private int _serverPort;
+        private bool _serverEnabled;
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -47,11 +49,40 @@ namespace TaskPilot
             }
         }
 
-        public ConfigurationWindowViewModel(List<MonitoredProgram> monitoredPrograms)
+        public int ServerPort
+        {
+            get => _serverPort;
+            set
+            {
+                if (_serverPort != value)
+                {
+                    _serverPort = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public bool ServerEnabled
+        {
+            get => _serverEnabled;
+            set
+            {
+                if (_serverEnabled != value)
+                {
+                    _serverEnabled = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public ConfigurationWindowViewModel(List<MonitoredProgram> monitoredPrograms, IniConfigReader.ServerSettings serverSettings)
         {
             _availableProcesses = new ObservableCollection<ConfigurableProcess>();
             _allProcesses = new List<ConfigurableProcess>();
             _originalMonitoredPrograms = new List<MonitoredProgram>(monitoredPrograms);
+
+            _serverPort = serverSettings.Port;
+            _serverEnabled = serverSettings.Enabled;
 
             LoadAvailableProcesses();
         }
@@ -217,6 +248,15 @@ namespace TaskPilot
             {
                 process.IsSelected = false;
             }
+        }
+
+        public IniConfigReader.ServerSettings GetServerSettings()
+        {
+            return new IniConfigReader.ServerSettings
+            {
+                Port = _serverPort,
+                Enabled = _serverEnabled
+            };
         }
 
         public void RemoveProcess(ConfigurableProcess process)

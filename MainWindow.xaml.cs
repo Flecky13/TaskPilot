@@ -24,6 +24,7 @@ namespace TaskPilot
         private readonly object _restartLock = new object();
         private bool _autoStartEnabled = true; // Control-Flag für Auto-Restart (nicht persistent)
         private bool _isUpdatingCheckboxProgrammatically = false; // Flag um Event-Rekursion zu vermeiden
+        private IniConfigReader.ServerSettings _serverSettings = new IniConfigReader.ServerSettings();
 
         public MainWindow()
         {
@@ -41,15 +42,11 @@ namespace TaskPilot
             _monitor = new ProcessMonitor();
             _monitor.StatusChanged += OnStatusChanged;
 
-            // Starte eingebetteten Webserver (REST + SignalR)
-            try
-            {
-                WebServer.Start(_monitor, 5110);
-            }
-            catch (System.Exception ex)
-            {
-                Debug.WriteLine($"WebServer konnte nicht gestartet werden: {ex.Message}");
-            }
+            // Lade Server-Einstellungen vor Start
+            _serverSettings = IniConfigReader.ReadServerSettings(_configPath);
+
+            // Starte eingebetteten Webserver (REST + SignalR) nur wenn aktiviert
+            TryStartWebServer();
 
             // Timer für automatische Aktualisierung (alle 5 Sekunden)
             _updateTimer = new System.Windows.Threading.DispatcherTimer();
@@ -296,6 +293,37 @@ namespace TaskPilot
             WindowState = WindowState.Minimized;
         }
 
+        private void TryStartWebServer()
+        {
+            if (!_serverSettings.Enabled)
+            {
+                Debug.WriteLine("WebServer ist deaktiviert (ServerEnabled=false)");
+                return;
+            }
+
+            try
+            {
+                WebServer.Start(_monitor, _serverSettings.Port);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"WebServer konnte nicht gestartet werden: {ex.Message}");
+            }
+        }
+
+        public async void ApplyServerSettings(IniConfigReader.ServerSettings settings)
+        {
+            _serverSettings = settings;
+            try
+            {
+                await WebServer.RestartAsync(_monitor, settings.Port, settings.Enabled);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"WebServer Restart fehlgeschlagen: {ex.Message}");
+            }
+        }
+
         public void ReloadConfiguration()
         {
             LoadConfiguration();
@@ -436,7 +464,8 @@ namespace TaskPilot
             {
                 var currentPrograms = IniConfigReader.ReadConfiguration(_configPath);
 
-                var configWindow = new ConfigurationWindow(_configPath, currentPrograms)
+                var serverSettings = IniConfigReader.ReadServerSettings(_configPath);
+                var configWindow = new ConfigurationWindow(_configPath, currentPrograms, serverSettings)
                 {
                     Owner = this
                 };
