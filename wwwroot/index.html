@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TaskPilot Dashboard</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 20px; }
+    h1 { font-size: 20px; margin-bottom: 10px; }
+    #status { margin-bottom: 8px; color: #555; font-weight: bold; }
+    #lastUpdate { font-size: 12px; color: #999; margin-bottom: 12px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 8px; font-size: 14px; }
+    th { background: #f0f0f0; text-align: left; }
+    .ok { color: #2e7d32; }
+    .bad { color: #c62828; }
+    .actions { white-space: nowrap; }
+    .actions button { padding: 4px 10px; margin: 0 2px; font-size: 12px; cursor: pointer; }
+    .actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-start { background: #2e7d32; color: white; border: none; border-radius: 3px; }
+    .btn-stop { background: #c62828; color: white; border: none; border-radius: 3px; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js" integrity="sha512-1k6xgF2h1k1WmW85p0lPHi2tY1gq2tWnqWf+QmZVfCkHfQqz2Jz2E4M51vX1dW1Q1p7J0QjQpK9Y8V//a3oS9w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+<body>
+  <h1>TaskPilot Dashboard</h1>
+  <div id="status">⏳ Initialisiere...</div>
+  <div id="lastUpdate"></div>
+  <div style="margin-bottom: 12px;">
+    <label style="font-weight: bold; cursor: pointer;">
+      <input type="checkbox" id="globalAutoStart" onchange="toggleGlobalAutoStart(this.checked)">
+      AutoStart global aktiviert
+    </label>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Status</th>
+        <th>PID</th>
+        <th>Seit</th>
+        <th>Aktionen</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+
+  <script>
+    const apiBase = location.origin;
+    const tbody = document.getElementById('tbody');
+    const statusEl = document.getElementById('status');
+    const lastUpdateEl = document.getElementById('lastUpdate');
+    const globalAutoStartEl = document.getElementById('globalAutoStart');
+    let connection = null;
+    let isUpdatingCheckboxProgrammatically = false; // Flag um Event-Loop zu vermeiden
+
+    function log(msg) {
+      const ts = new Date().toLocaleTimeString('de-DE');
+      console.log(`[${ts}] ${msg}`);
+    }
+
+    function updateTimestamp() {
+      const now = new Date();
+      lastUpdateEl.textContent = `Letzte Aktualisierung: ${now.toLocaleString('de-DE')}`;
+    }
+
+    function renderRows(items) {
+      tbody.innerHTML = '';
+      for (const it of items) {
+        const tr = document.createElement('tr');
+
+        const canStart = !it.isActive && it.hasStartCommand;
+        const canStop = it.isActive;
+
+        tr.innerHTML = `
+          <td>${it.displayName}</td>
+          <td class="${it.isActive ? 'ok' : 'bad'}">${it.statusText}</td>
+          <td>${it.processId || ''}</td>
+          <td>${new Date(it.statusSince).toLocaleString('de-DE')}</td>
+          <td class="actions">
+            <button class="btn-start" ${canStart ? '' : 'disabled'}
+                    onclick="startProcess('${it.processName}')"
+                    title="${canStart ? 'Prozess starten' : 'Nicht verfügbar'}">
+              Start
+            </button>
+            <button class="btn-stop" ${canStop ? '' : 'disabled'}
+                    onclick="stopProcess('${it.processName}')"
+                    title="${canStop ? 'Prozess stoppen' : 'Nicht aktiv'}">
+              Stop
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      }
+      loadGlobalAutoStart();
+      updateTimestamp();
+    }
+
+    async function startProcess(processName) {
+      try {
+        log(`Starte Prozess: ${processName}`);
+        const res = await fetch(`${apiBase}/api/processes/${processName}/start`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          log(`✓ Start erfolgreich: ${processName}`);
+          setTimeout(load, 1000);
+        } else {
+          log(`✗ Start fehlgeschlagen: ${data.error || 'Unbekannt'}`);
+        }
+      } catch (e) {
+        log(`✗ Fehler beim Starten: ${e.message}`);
+      }
+    }
+
+    async function stopProcess(processName) {
+      try {
+        log(`Stoppe Prozess: ${processName}`);
+        const res = await fetch(`${apiBase}/api/processes/${processName}/stop`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          log(`✓ Stop erfolgreich: ${processName}`);
+          setTimeout(load, 1000);
+        } else {
+          log(`✗ Stop fehlgeschlagen: ${data.error || 'Unbekannt'}`);
+        }
+      } catch (e) {
+        log(`✗ Fehler beim Stoppen: ${e.message}`);
+      }
+    }
+
+    async function toggleGlobalAutoStart(checked) {
+      if (isUpdatingCheckboxProgrammatically) {
+        log('Ignoriere toggleGlobalAutoStart da checkbox vom Programm aktualisiert wird');
+        return;
+      }
+
+      try {
+        log(`Toggle Global AutoStart: ${checked}`);
+        const res = await fetch(`${apiBase}/api/settings/autostart`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: checked })
+        });
+        if (res.ok) {
+          log(`✓ Global AutoStart geändert: ${checked}`);
+        } else {
+          log(`✗ Fehler beim Ändern von Global AutoStart`);
+          globalAutoStartEl.checked = !checked;
+        }
+      } catch (e) {
+        log(`✗ Fehler: ${e.message}`);
+        globalAutoStartEl.checked = !checked;
+      }
+    }
+
+    async function loadGlobalAutoStart() {
+      try {
+        log('Lade GlobalAutoStart Status...');
+        const res = await fetch(`${apiBase}/api/settings/autostart`);
+        if (res.ok) {
+          const data = await res.json();
+          log(`GET /api/settings/autostart antwortet: enabled=${data.enabled}`);
+          isUpdatingCheckboxProgrammatically = true;
+          globalAutoStartEl.checked = data.enabled;
+          isUpdatingCheckboxProgrammatically = false;
+          log(`✓ Checkbox aktualisiert auf: ${data.enabled}`);
+        } else {
+          log(`Fehler: GET /api/settings/autostart antwortet mit Status ${res.status}`);
+        }
+      } catch (e) {
+        log(`Fehler beim Laden von AutoStart: ${e.message}`);
+      }
+    }
+
+    async function load() {
+      try {
+        log('Fetching /api/processes...');
+        const res = await fetch(`${apiBase}/api/processes`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        renderRows(data);
+        statusEl.textContent = `✓ Verbunden (${data.length} Prozesse)`;
+        log(`Loaded ${data.length} processes`);
+      } catch (e) {
+        statusEl.textContent = '✗ Fehler beim Laden';
+        log(`Error: ${e.message}`);
+        // Immer auch AutoStart-Status aktualisieren
+        await loadGlobalAutoStart();
+      }
+    }
+
+    // Initial load
+    log('Lade initiale Daten...');
+    load();
+    loadGlobalAutoStart();
+
+    // SignalR Setup (mit Fallback auf Polling)
+    setTimeout(() => {
+      if (typeof signalR === 'undefined') {
+        log('SignalR nicht verfügbar - Polling-Fallback aktiv');
+        statusEl.textContent = '⚠ Polling-Modus (5s)';
+        setInterval(load, 5000);
+        return;
+      }
+
+      log('Initialisiere SignalR...');
+      try {
+        connection = new signalR.HubConnectionBuilder()
+          .withUrl(`${apiBase}/hub/status`)
+          .withAutomaticReconnect()
+          .configureLogging(signalR.LogLevel.Warning)
+          .build();
+
+        connection.onreconnecting(() => {
+          statusEl.textContent = '⟳ Verbindung wird wiederhergestellt...';
+          log('SignalR reconnecting...');
+        });
+
+        connection.onreconnected(() => {
+          statusEl.textContent = '✓ SignalR Live';
+          log('SignalR reconnected');
+        });
+
+        connection.onclose(() => {
+          statusEl.textContent = '✗ Verbindung getrennt';
+          log('SignalR closed');
+        });
+
+        connection.on('statusChanged', (s) => {
+          log(`Status geändert: ${s.displayName}`);
+          load();
+        });
+
+        connection.on('statusSnapshot', (items) => {
+          log(`Snapshot empfangen: ${items.length} Prozesse`);
+          renderRows(items);
+          statusEl.textContent = '✓ SignalR Live';
+          // Checkbox für AutoStart ebenfalls aktualisieren
+          loadGlobalAutoStart();
+        });
+
+        connection.start()
+          .then(() => {
+            statusEl.textContent = '✓ SignalR Live';
+            log('SignalR verbunden');
+          })
+          .catch(err => {
+            statusEl.textContent = '⚠ Polling-Modus (5s)';
+            log('SignalR Fehler, verwende Polling: ' + err);
+            setInterval(load, 5000);
+          });
+      } catch (ex) {
+        log('Exception: ' + ex);
+        statusEl.textContent = '⚠ Polling-Modus (5s)';
+        setInterval(load, 5000);
+      }
+    }, 100);
+  </script>
+</body>
+</html>

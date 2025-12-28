@@ -23,6 +23,7 @@ namespace TaskPilot
         private readonly HashSet<string> _recentlyRestartedProcesses = new HashSet<string>(); // Cache um doppelte Restarts zu vermeiden
         private readonly object _restartLock = new object();
         private bool _autoStartEnabled = true; // Control-Flag für Auto-Restart (nicht persistent)
+        private bool _isUpdatingCheckboxProgrammatically = false; // Flag um Event-Rekursion zu vermeiden
 
         public MainWindow()
         {
@@ -39,6 +40,16 @@ namespace TaskPilot
 
             _monitor = new ProcessMonitor();
             _monitor.StatusChanged += OnStatusChanged;
+
+            // Starte eingebetteten Webserver (REST + SignalR)
+            try
+            {
+                WebServer.Start(_monitor, 5110);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.WriteLine($"WebServer konnte nicht gestartet werden: {ex.Message}");
+            }
 
             // Timer für automatische Aktualisierung (alle 5 Sekunden)
             _updateTimer = new System.Windows.Threading.DispatcherTimer();
@@ -291,8 +302,93 @@ namespace TaskPilot
             UpdateProgramStatuses();
         }
 
-        private void Refresh_Click(object sender, RoutedEventArgs e)
+        // Öffentliche Methoden für WebServer-Zugriff
+        public MonitoredProgram? GetProgramByProcessName(string processName)
         {
+            return _currentPrograms.FindByProcessName(processName);
+        }
+
+        public void StartProcessManually(string processName)
+        {
+            var program = _currentPrograms.FindByProcessName(processName);
+            if (program != null)
+            {
+                var status = _programStatuses.FirstOrDefault(s => s.ProcessName.Equals(processName, StringComparison.OrdinalIgnoreCase));
+                if (status != null)
+                {
+                    ManualStartProcess(program, status);
+                }
+            }
+        }
+
+        public void StopProcessManually(string processName)
+        {
+            var status = _programStatuses.FirstOrDefault(s => s.ProcessName.Equals(processName, StringComparison.OrdinalIgnoreCase));
+            if (status != null && status.IsActive)
+            {
+                try
+                {
+                    var processes = Process.GetProcessesByName(processName);
+                    foreach (var proc in processes)
+                    {
+                        proc.Kill();
+                        proc.WaitForExit(2000);
+                    }
+                    StatusText.Text = $"✓ {status.DisplayName} gestoppt";
+                }
+                catch (Exception ex)
+                {
+                    StatusText.Text = $"✗ Fehler beim Stoppen: {ex.Message}";
+                }
+            }
+        }
+
+        public bool? ToggleAutoRestart(string processName)
+        {
+            var program = _currentPrograms.FindByProcessName(processName);
+            if (program != null)
+            {
+                program.AutoRestart = !program.AutoRestart;
+
+                // Speichere Änderung in INI
+                var allPrograms = IniConfigReader.ReadConfiguration(_configPath);
+                var programInFile = allPrograms.FindByProcessName(processName);
+                if (programInFile != null)
+                {
+                    programInFile.AutoRestart = program.AutoRestart;
+                    IniConfigReader.SaveConfiguration(_configPath, allPrograms);
+                }
+
+                StatusText.Text = $"AutoRestart {(program.AutoRestart ? "aktiviert" : "deaktiviert")}: {program.DisplayName}";
+                return program.AutoRestart;
+            }
+            return null;
+        }
+
+        public bool GetGlobalAutoStartEnabled()
+        {
+            return _autoStartEnabled;
+        }
+
+        public void SetGlobalAutoStartEnabled(bool enabled)
+        {
+            _autoStartEnabled = enabled;
+            try
+            {
+                if (AutoStartCheckBox != null)
+                {
+                    _isUpdatingCheckboxProgrammatically = true;
+                    AutoStartCheckBox.IsChecked = enabled;
+                    _isUpdatingCheckboxProgrammatically = false;
+                }
+            }
+            catch { }
+            StatusText.Text = $"Global AutoStart {(enabled ? "aktiviert" : "deaktiviert")}";
+            DebugWindow.Instance?.LogMessage($"[AutoStart] Global {(enabled ? "aktiviert" : "deaktiviert")} (programm)");
+
+            // Wichtig: Auch von aussen gesetzter AutoStart soll mit SignalR den anderen Clients mitteilen
+            WebServer.NotifyAutoStartChanged(enabled);
+
             UpdateProgramStatuses();
         }
 
@@ -327,6 +423,11 @@ namespace TaskPilot
             {
                 DialogHelper.ShowOperationError("Hilfe öffnen", ex.Message);
             }
+        }
+
+        private void Refresh_Click(object sender, RoutedEventArgs e)
+        {
+            UpdateProgramStatuses();
         }
 
         private void EditConfig_Click(object sender, RoutedEventArgs e)
@@ -721,14 +822,20 @@ namespace TaskPilot
             return false;
         }        private void AutoStartCheckBox_Checked(object sender, RoutedEventArgs e)
         {
+            if (_isUpdatingCheckboxProgrammatically) return; // Ignoriere Events vom Programm selbst
+
             _autoStartEnabled = true;
-            DebugWindow.Instance?.LogMessage("[AutoStart] Aktiviert");
+            DebugWindow.Instance?.LogMessage("[AutoStart] Aktiviert (benutzer)");
+            WebServer.NotifyAutoStartChanged(_autoStartEnabled);
         }
 
         private void AutoStartCheckBox_Unchecked(object sender, RoutedEventArgs e)
         {
+            if (_isUpdatingCheckboxProgrammatically) return; // Ignoriere Events vom Programm selbst
+
             _autoStartEnabled = false;
-            DebugWindow.Instance?.LogMessage("[AutoStart] Deaktiviert");
+            DebugWindow.Instance?.LogMessage("[AutoStart] Deaktiviert (benutzer)");
+            WebServer.NotifyAutoStartChanged(_autoStartEnabled);
         }
 
         // Button: Alle Prozesse minimieren
