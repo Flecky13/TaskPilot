@@ -19,31 +19,161 @@
     .actions button:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-start { background: #2e7d32; color: white; border: none; border-radius: 3px; }
     .btn-stop { background: #c62828; color: white; border: none; border-radius: 3px; }
+
+    /* Login Modal */
+    #loginModal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    #loginModal.hidden {
+      display: none;
+    }
+
+    .login-box {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+      text-align: center;
+      min-width: 300px;
+    }
+
+    .login-box h2 {
+      margin: 0 0 20px 0;
+      font-size: 18px;
+    }
+
+    .login-box input {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 15px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
+
+    .login-box button {
+      width: 100%;
+      padding: 10px;
+      background: #1976d2;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .login-box button:hover {
+      background: #1565c0;
+    }
+
+    .login-box .error {
+      color: #c62828;
+      margin-bottom: 10px;
+      font-size: 12px;
+    }
+
+    #contentArea {
+      display: none;
+    }
+
+    #contentArea.visible {
+      display: block;
+    }
+
+    .logout-btn {
+      padding: 6px 12px;
+      background: #f44336;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .logout-btn:hover {
+      background: #d32f2f;
+    }
+
+    .login-btn {
+      padding: 6px 12px;
+      background: #1976d2;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .login-btn:hover {
+      background: #1565c0;
+    }
+
+    #autoStartNote {
+      display: inline;
+    }
+
+    #autoStartNote.hidden {
+      display: none;
+    }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js" integrity="sha512-1k6xgF2h1k1WmW85p0lPHi2tY1gq2tWnqWf+QmZVfCkHfQqz2Jz2E4M51vX1dW1Q1p7J0QjQpK9Y8V//a3oS9w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
-  <h1>TaskPilot Dashboard</h1>
-  <div id="status">⏳ Initialisiere...</div>
-  <div id="lastUpdate"></div>
-  <div style="margin-bottom: 12px;">
-    <label style="font-weight: bold; cursor: pointer;">
-      <input type="checkbox" id="globalAutoStart" onchange="toggleGlobalAutoStart(this.checked)">
-      AutoStart global aktiviert
-    </label>
+  <!-- Login Modal (nur wenn nötig) -->
+  <div id="loginModal" class="hidden">
+    <div class="login-box">
+      <h2>Authentifizierung erforderlich</h2>
+      <p style="font-size: 12px; color: #666; margin: 0 0 15px 0;">Gib das Passwort ein um Prozesse zu steuern</p>
+      <div id="loginError" class="error"></div>
+      <input type="password" id="passwordInput" placeholder="Passwort eingeben" onkeypress="if(event.key==='Enter') login()">
+      <button onclick="login()">Anmelden</button>
+    </div>
   </div>
-  <table>
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Status</th>
-        <th>PID</th>
-        <th>Seit</th>
-        <th>Aktionen</th>
-      </tr>
-    </thead>
-    <tbody id="tbody"></tbody>
-  </table>
+
+  <!-- Hauptinhalt -->
+  <div id="contentArea" class="visible">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+      <h1 style="margin: 0;">TaskPilot Dashboard</h1>
+      <div id="authStatus" style="font-size: 12px; color: #999;">
+        <span id="authStatusText">⏳ Nicht angemeldet</span>
+        <button id="loginBtn" class="login-btn" onclick="showLoginModal()" style="margin-left: 10px;">Anmelden</button>
+        <button id="logoutBtn" class="logout-btn" onclick="logout()" style="display: none; margin-left: 10px;">Abmelden</button>
+      </div>
+    </div>
+    <div id="status">⏳ Initialisiere...</div>
+    <div id="lastUpdate"></div>
+    <div style="margin-bottom: 12px;">
+      <label style="font-weight: bold; cursor: pointer;">
+        <input type="checkbox" id="globalAutoStart" onchange="toggleGlobalAutoStart(this.checked)" disabled>
+        AutoStart global aktiviert
+      </label>
+      <span style="font-size: 11px; color: #999; margin-left: 10px;" id="autoStartNote">(Anmelden um zu aktivieren)</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Status</th>
+          <th>PID</th>
+          <th>Seit</th>
+          <th>Aktionen</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
 
   <script>
     const apiBase = location.origin;
@@ -51,12 +181,103 @@
     const statusEl = document.getElementById('status');
     const lastUpdateEl = document.getElementById('lastUpdate');
     const globalAutoStartEl = document.getElementById('globalAutoStart');
+    const loginModal = document.getElementById('loginModal');
+    const contentArea = document.getElementById('contentArea');
+    const passwordInput = document.getElementById('passwordInput');
+    const loginError = document.getElementById('loginError');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const authStatusText = document.getElementById('authStatusText');
+    const autoStartNote = document.getElementById('autoStartNote');
     let connection = null;
-    let isUpdatingCheckboxProgrammatically = false; // Flag um Event-Loop zu vermeiden
+    let isUpdatingCheckboxProgrammatically = false;
+    let authToken = localStorage.getItem('taskpilot_token');
 
     function log(msg) {
       const ts = new Date().toLocaleTimeString('de-DE');
       console.log(`[${ts}] ${msg}`);
+    }
+
+    function getAuthHeaders() {
+      return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`
+      };
+    }
+
+    function isAuthenticated() {
+      return authToken !== null && authToken !== '';
+    }
+
+    function updateAuthUI() {
+      if (isAuthenticated()) {
+        authStatusText.textContent = '✓ Angemeldet';
+        document.getElementById('loginBtn').style.display = 'none';
+        logoutBtn.style.display = 'inline-block';
+        autoStartNote.classList.add('hidden');
+        globalAutoStartEl.disabled = false;
+        // Aktiviere alle Action-Buttons
+        document.querySelectorAll('.actions button').forEach(btn => {
+          btn.disabled = false;
+        });
+      } else {
+        authStatusText.textContent = '⏳ Nicht angemeldet';
+        document.getElementById('loginBtn').style.display = 'inline-block';
+        logoutBtn.style.display = 'none';
+        autoStartNote.classList.remove('hidden');
+        globalAutoStartEl.disabled = true;
+        // Deaktiviere Action-Buttons
+        document.querySelectorAll('.actions button').forEach(btn => {
+          btn.disabled = true;
+        });
+      }
+    }
+
+    async function login() {
+      const password = passwordInput.value;
+      if (!password) {
+        loginError.textContent = 'Passwort erforderlich';
+        return;
+      }
+
+      try {
+        loginError.textContent = '';
+        log('Login-Anfrage...');
+        const res = await fetch(`${apiBase}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          authToken = data.token;
+          localStorage.setItem('taskpilot_token', authToken);
+          log('✓ Login erfolgreich');
+          loginModal.classList.add('hidden');
+          passwordInput.value = '';
+          updateAuthUI();
+        } else {
+          loginError.textContent = 'Passwort falsch';
+          log('✗ Login fehlgeschlagen');
+        }
+      } catch (e) {
+        loginError.textContent = `Fehler: ${e.message}`;
+        log(`Login-Fehler: ${e.message}`);
+      }
+    }
+
+    function logout() {
+      authToken = null;
+      localStorage.removeItem('taskpilot_token');
+      passwordInput.value = '';
+      loginError.textContent = '';
+      updateAuthUI();
+      log('Logout');
+    }
+
+    function showLoginModal() {
+      loginModal.classList.remove('hidden');
+      passwordInput.focus();
     }
 
     function updateTimestamp() {
@@ -71,6 +292,7 @@
 
         const canStart = !it.isActive && it.hasStartCommand;
         const canStop = it.isActive;
+        const isAuth = isAuthenticated();
 
         tr.innerHTML = `
           <td>${it.displayName}</td>
@@ -78,14 +300,14 @@
           <td>${it.processId || ''}</td>
           <td>${new Date(it.statusSince).toLocaleString('de-DE')}</td>
           <td class="actions">
-            <button class="btn-start" ${canStart ? '' : 'disabled'}
+            <button class="btn-start" ${(canStart && isAuth) ? '' : 'disabled'}
                     onclick="startProcess('${it.processName}')"
-                    title="${canStart ? 'Prozess starten' : 'Nicht verfügbar'}">
+                    title="${!isAuth ? 'Anmelden erforderlich' : (canStart ? 'Prozess starten' : 'Nicht verfügbar')}">
               Start
             </button>
-            <button class="btn-stop" ${canStop ? '' : 'disabled'}
+            <button class="btn-stop" ${(canStop && isAuth) ? '' : 'disabled'}
                     onclick="stopProcess('${it.processName}')"
-                    title="${canStop ? 'Prozess stoppen' : 'Nicht aktiv'}">
+                    title="${!isAuth ? 'Anmelden erforderlich' : (canStop ? 'Prozess stoppen' : 'Nicht aktiv')}">
               Stop
             </button>
           </td>
@@ -97,13 +319,23 @@
     }
 
     async function startProcess(processName) {
+      if (!isAuthenticated()) {
+        showLoginModal();
+        return;
+      }
       try {
         log(`Starte Prozess: ${processName}`);
-        const res = await fetch(`${apiBase}/api/processes/${processName}/start`, { method: 'POST' });
+        const res = await fetch(`${apiBase}/api/processes/${processName}/start`, {
+          method: 'POST',
+          headers: getAuthHeaders()
+        });
         const data = await res.json();
         if (res.ok) {
           log(`✓ Start erfolgreich: ${processName}`);
           setTimeout(load, 1000);
+        } else if (res.status === 401) {
+          logout();
+          showLoginModal();
         } else {
           log(`✗ Start fehlgeschlagen: ${data.error || 'Unbekannt'}`);
         }
@@ -113,13 +345,23 @@
     }
 
     async function stopProcess(processName) {
+      if (!isAuthenticated()) {
+        showLoginModal();
+        return;
+      }
       try {
         log(`Stoppe Prozess: ${processName}`);
-        const res = await fetch(`${apiBase}/api/processes/${processName}/stop`, { method: 'POST' });
+        const res = await fetch(`${apiBase}/api/processes/${processName}/stop`, {
+          method: 'POST',
+          headers: getAuthHeaders()
+        });
         const data = await res.json();
         if (res.ok) {
           log(`✓ Stop erfolgreich: ${processName}`);
           setTimeout(load, 1000);
+        } else if (res.status === 401) {
+          logout();
+          showLoginModal();
         } else {
           log(`✗ Stop fehlgeschlagen: ${data.error || 'Unbekannt'}`);
         }
@@ -129,6 +371,12 @@
     }
 
     async function toggleGlobalAutoStart(checked) {
+      if (!isAuthenticated()) {
+        globalAutoStartEl.checked = !checked;
+        showLoginModal();
+        return;
+      }
+
       if (isUpdatingCheckboxProgrammatically) {
         log('Ignoriere toggleGlobalAutoStart da checkbox vom Programm aktualisiert wird');
         return;
@@ -138,11 +386,14 @@
         log(`Toggle Global AutoStart: ${checked}`);
         const res = await fetch(`${apiBase}/api/settings/autostart`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ enabled: checked })
         });
         if (res.ok) {
           log(`✓ Global AutoStart geändert: ${checked}`);
+        } else if (res.status === 401) {
+          logout();
+          showLoginModal();
         } else {
           log(`✗ Fehler beim Ändern von Global AutoStart`);
           globalAutoStartEl.checked = !checked;
@@ -184,77 +435,79 @@
       } catch (e) {
         statusEl.textContent = '✗ Fehler beim Laden';
         log(`Error: ${e.message}`);
-        // Immer auch AutoStart-Status aktualisieren
         await loadGlobalAutoStart();
       }
     }
 
-    // Initial load
-    log('Lade initiale Daten...');
-    load();
-    loadGlobalAutoStart();
+    function startLiveUpdates() {
+      log('Lade initiale Daten...');
+      load();
+      loadGlobalAutoStart();
 
-    // SignalR Setup (mit Fallback auf Polling)
-    setTimeout(() => {
-      if (typeof signalR === 'undefined') {
-        log('SignalR nicht verfügbar - Polling-Fallback aktiv');
-        statusEl.textContent = '⚠ Polling-Modus (5s)';
-        setInterval(load, 5000);
-        return;
-      }
+      setTimeout(() => {
+        if (typeof signalR === 'undefined') {
+          log('SignalR nicht verfügbar - Polling-Fallback aktiv');
+          statusEl.textContent = '⚠ Polling-Modus (5s)';
+          setInterval(load, 5000);
+          return;
+        }
 
-      log('Initialisiere SignalR...');
-      try {
-        connection = new signalR.HubConnectionBuilder()
-          .withUrl(`${apiBase}/hub/status`)
-          .withAutomaticReconnect()
-          .configureLogging(signalR.LogLevel.Warning)
-          .build();
+        log('Initialisiere SignalR...');
+        try {
+          connection = new signalR.HubConnectionBuilder()
+            .withUrl(`${apiBase}/hub/status`)
+            .withAutomaticReconnect()
+            .configureLogging(signalR.LogLevel.Warning)
+            .build();
 
-        connection.onreconnecting(() => {
-          statusEl.textContent = '⟳ Verbindung wird wiederhergestellt...';
-          log('SignalR reconnecting...');
-        });
-
-        connection.onreconnected(() => {
-          statusEl.textContent = '✓ SignalR Live';
-          log('SignalR reconnected');
-        });
-
-        connection.onclose(() => {
-          statusEl.textContent = '✗ Verbindung getrennt';
-          log('SignalR closed');
-        });
-
-        connection.on('statusChanged', (s) => {
-          log(`Status geändert: ${s.displayName}`);
-          load();
-        });
-
-        connection.on('statusSnapshot', (items) => {
-          log(`Snapshot empfangen: ${items.length} Prozesse`);
-          renderRows(items);
-          statusEl.textContent = '✓ SignalR Live';
-          // Checkbox für AutoStart ebenfalls aktualisieren
-          loadGlobalAutoStart();
-        });
-
-        connection.start()
-          .then(() => {
-            statusEl.textContent = '✓ SignalR Live';
-            log('SignalR verbunden');
-          })
-          .catch(err => {
-            statusEl.textContent = '⚠ Polling-Modus (5s)';
-            log('SignalR Fehler, verwende Polling: ' + err);
-            setInterval(load, 5000);
+          connection.onreconnecting(() => {
+            statusEl.textContent = '⟳ Verbindung wird wiederhergestellt...';
+            log('SignalR reconnecting...');
           });
-      } catch (ex) {
-        log('Exception: ' + ex);
-        statusEl.textContent = '⚠ Polling-Modus (5s)';
-        setInterval(load, 5000);
-      }
-    }, 100);
+
+          connection.onreconnected(() => {
+            statusEl.textContent = '✓ SignalR Live';
+            log('SignalR reconnected');
+          });
+
+          connection.onclose(() => {
+            statusEl.textContent = '✗ Verbindung getrennt';
+            log('SignalR closed');
+          });
+
+          connection.on('statusChanged', (s) => {
+            log(`Status geändert: ${s.displayName}`);
+            load();
+          });
+
+          connection.on('statusSnapshot', (items) => {
+            log(`Snapshot empfangen: ${items.length} Prozesse`);
+            renderRows(items);
+            statusEl.textContent = '✓ SignalR Live';
+            loadGlobalAutoStart();
+          });
+
+          connection.start()
+            .then(() => {
+              statusEl.textContent = '✓ SignalR Live';
+              log('SignalR verbunden');
+            })
+            .catch(err => {
+              statusEl.textContent = '⚠ Polling-Modus (5s)';
+              log('SignalR Fehler, verwende Polling: ' + err);
+              setInterval(load, 5000);
+            });
+        } catch (ex) {
+          log('Exception: ' + ex);
+          statusEl.textContent = '⚠ Polling-Modus (5s)';
+          setInterval(load, 5000);
+        }
+      }, 100);
+    }
+
+    // Beim Laden: Zeige Dashboard an und starte Updates
+    updateAuthUI();
+    startLiveUpdates();
   </script>
 </body>
 </html>

@@ -321,7 +321,7 @@ namespace TaskPilot
                     return;
                 }
 
-                // Speichere ALLE Programme + Server-Einstellungen in die INI
+                // Speichere ALLE Programme + Server-Einstellungen (inkl. Passwort) in die INI
                 IniConfigReader.SaveConfiguration(_configFilePath, allPrograms, serverSettings);
 
                 // Zähle nur die überwachten für die Meldung

@@ -8,6 +8,10 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Threading;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 namespace TaskPilot
 {
@@ -19,6 +23,8 @@ namespace TaskPilot
         private static Timer? _snapshotTimer;
         private static bool _hubContextReady = false; // Flag um zu überprüfen ob HubContext bereit ist
         private static Task? _runTask;
+        private static string? _configPath;
+        private const string JwtSecretKey = "TaskPilot_Default_Secret_Key_For_JWT_Tokens_2024"; // In Produktion von außen setzen
 
         public static void NotifyAutoStartChanged(bool enabled)
         {
@@ -50,10 +56,11 @@ namespace TaskPilot
             }
         }
 
-        public static void Start(ProcessMonitor monitor, int port = 5110)
+        public static void Start(ProcessMonitor monitor, int port = 5110, string? configPath = null)
         {
             if (_initialized) return;
             _initialized = true;
+            _configPath = configPath;
 
             var builder = WebApplication.CreateBuilder();
             // Binde auf alle Interfaces, damit Zugriff auch übers Netzwerk möglich ist
@@ -74,6 +81,31 @@ namespace TaskPilot
             _app.UseCors();
             _app.UseDefaultFiles();
             _app.UseStaticFiles();
+
+            // Login-Endpunkt (nicht authentifiziert)
+            _app.MapPost("/api/auth/login", async (HttpRequest request) =>
+            {
+                try
+                {
+                    var body = await request.ReadFromJsonAsync<LoginRequest>();
+                    if (body == null || string.IsNullOrWhiteSpace(body.Password))
+                        return Results.BadRequest(new { error = "Password erforderlich" });
+
+                    // Passwort aus INI lesen (aus [Server] Sektion)
+                    var serverSettings = IniConfigReader.ReadServerSettings(_configPath ?? "programs.ini");
+                    if (!string.Equals(body.Password, serverSettings.Password, StringComparison.Ordinal))
+                        return Results.Unauthorized();
+
+                    // JWT-Token generieren
+                    var token = GenerateJwtToken();
+                    return Results.Ok(new { token });
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[WebServer] Login error: {ex.Message}");
+                    return Results.BadRequest(new { error = ex.Message });
+                }
+            });
 
             _app.MapGet("/api/processes", (ProcessMonitor m) =>
             {
@@ -117,8 +149,11 @@ namespace TaskPilot
                 });
             });
 
-            _app.MapPost("/api/processes/{processName}/start", (string processName, ProcessMonitor m) =>
+            _app.MapPost("/api/processes/{processName}/start", (string processName, HttpRequest request, ProcessMonitor m) =>
             {
+                if (!ValidateToken(request))
+                    return Results.Unauthorized();
+
                 System.Diagnostics.Debug.WriteLine($"[WebServer] POST /start: {processName}");
                 var statuses = m.GetStatuses().ToList();
                 var status = statuses.FirstOrDefault(s => s.ProcessName.Equals(processName, StringComparison.OrdinalIgnoreCase));
@@ -139,8 +174,11 @@ namespace TaskPilot
                 return Results.Ok(new { message = "Start-Befehl gesendet" });
             });
 
-            _app.MapPost("/api/processes/{processName}/stop", (string processName, ProcessMonitor m) =>
+            _app.MapPost("/api/processes/{processName}/stop", (string processName, HttpRequest request, ProcessMonitor m) =>
             {
+                if (!ValidateToken(request))
+                    return Results.Unauthorized();
+
                 System.Diagnostics.Debug.WriteLine($"[WebServer] POST /stop: {processName}");
                 var statuses = m.GetStatuses().ToList();
                 var status = statuses.FirstOrDefault(s => s.ProcessName.Equals(processName, StringComparison.OrdinalIgnoreCase));
@@ -161,8 +199,11 @@ namespace TaskPilot
                 return Results.Ok(new { message = "Stop-Befehl gesendet" });
             });
 
-            _app.MapPost("/api/processes/{processName}/autorestart", (string processName, ProcessMonitor m) =>
+            _app.MapPost("/api/processes/{processName}/autorestart", (string processName, HttpRequest request, ProcessMonitor m) =>
             {
+                if (!ValidateToken(request))
+                    return Results.Unauthorized();
+
                 System.Diagnostics.Debug.WriteLine($"[WebServer] POST /autorestart: {processName}");
 
                 System.Windows.Application.Current.Dispatcher.Invoke(() =>
@@ -193,6 +234,9 @@ namespace TaskPilot
 
                 _app.MapPost("/api/settings/autostart", async (HttpRequest request) =>
                 {
+                    if (!ValidateToken(request))
+                        return Results.Unauthorized();
+
                     var body = await request.ReadFromJsonAsync<AutoStartRequest>();
                     if (body == null)
                         return Results.BadRequest(new { error = "Invalid request" });
@@ -325,13 +369,74 @@ namespace TaskPilot
             }
         }
 
-        public static async Task RestartAsync(ProcessMonitor monitor, int port, bool enabled)
+        public static async Task RestartAsync(ProcessMonitor monitor, int port, bool enabled, string? configPath = null)
         {
             await StopAsync();
             if (enabled)
             {
-                Start(monitor, port);
+                Start(monitor, port, configPath);
             }
+        }
+
+        private static string GenerateJwtToken()
+        {
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(JwtSecretKey));
+            var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            var claims = new[]
+            {
+                new Claim(ClaimTypes.Name, "Dashboard"),
+                new Claim("isAuthenticated", "true")
+            };
+
+            var token = new JwtSecurityToken(
+                issuer: "TaskPilot",
+                audience: "TaskPilot-Dashboard",
+                claims: claims,
+                expires: DateTime.UtcNow.AddHours(24),
+                signingCredentials: credentials
+            );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        private static bool ValidateToken(HttpRequest request)
+        {
+            try
+            {
+                if (!request.Headers.TryGetValue("Authorization", out var authHeader))
+                    return false;
+
+                var token = authHeader.ToString().Replace("Bearer ", "");
+                if (string.IsNullOrWhiteSpace(token))
+                    return false;
+
+                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(JwtSecretKey));
+                var tokenHandler = new JwtSecurityTokenHandler();
+
+                var validationParams = new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = key,
+                    ValidateIssuer = false,
+                    ValidateAudience = false,
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.Zero
+                };
+
+                tokenHandler.ValidateToken(token, validationParams, out _);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[WebServer] Token validation error: {ex.Message}");
+                return false;
+            }
+        }
+
+        private class LoginRequest
+        {
+            public string? Password { get; set; }
         }
 
         private class AutoStartRequest

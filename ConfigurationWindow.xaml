@@ -115,6 +115,11 @@
                                  Text="{Binding ServerPort, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
                     <CheckBox Content="Server aktiv" IsChecked="{Binding ServerEnabled, Mode=TwoWay}" VerticalAlignment="Center" FontSize="11" Margin="12,0,0,0"/>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="24,0,0,0">
+                        <TextBlock Text="Passwort:" VerticalAlignment="Center" FontSize="11"/>
+                        <TextBox Width="120" Height="24" Padding="6,2" FontSize="11"
+                                 Text="{Binding SecurityPassword, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- Rechts ausgerichtete Buttons -->

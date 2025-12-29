@@ -19,6 +19,7 @@ namespace TaskPilot
         private List<MonitoredProgram> _originalMonitoredPrograms;
         private int _serverPort;
         private bool _serverEnabled;
+        private string _securityPassword = "admin";
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -75,6 +76,19 @@ namespace TaskPilot
             }
         }
 
+        public string SecurityPassword
+        {
+            get => _securityPassword;
+            set
+            {
+                if (_securityPassword != value)
+                {
+                    _securityPassword = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
         public ConfigurationWindowViewModel(List<MonitoredProgram> monitoredPrograms, IniConfigReader.ServerSettings serverSettings)
         {
             _availableProcesses = new ObservableCollection<ConfigurableProcess>();
@@ -83,6 +97,7 @@ namespace TaskPilot
 
             _serverPort = serverSettings.Port;
             _serverEnabled = serverSettings.Enabled;
+            _securityPassword = serverSettings.Password;
 
             LoadAvailableProcesses();
         }
@@ -255,7 +270,8 @@ namespace TaskPilot
             return new IniConfigReader.ServerSettings
             {
                 Port = _serverPort,
-                Enabled = _serverEnabled
+                Enabled = _serverEnabled,
+                Password = _securityPassword
             };
         }
 

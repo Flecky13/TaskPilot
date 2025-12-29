@@ -15,7 +15,9 @@ namespace TaskPilot
         {
             public int Port { get; set; } = 5110;
             public bool Enabled { get; set; } = true;
+            public string Password { get; set; } = "admin";
         }
+
 
         public static List<MonitoredProgram> ReadConfiguration(string filePath)
         {
@@ -146,6 +148,10 @@ namespace TaskPilot
                     case "enabled":
                         settings.Enabled = value.Equals("true", StringComparison.OrdinalIgnoreCase);
                         break;
+                    case "password":
+                        if (!string.IsNullOrWhiteSpace(value))
+                            settings.Password = value;
+                        break;
                 }
             }
 
@@ -160,6 +166,7 @@ namespace TaskPilot
 [Server]
 Port=5110
 Enabled=true
+Password=admin
 
 ; Programme:
 ; Format:
@@ -242,10 +249,11 @@ Description=Windows Rechner
                 sb.AppendLine("; Generiert am: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
                 sb.AppendLine();
 
-                // Globale Server-Einstellungen
+                // Globale Server-Einstellungen (inkl. Passwort)
                 sb.AppendLine("[Server]");
                 sb.AppendLine($"Port={settingsToWrite.Port}");
                 sb.AppendLine($"Enabled={(settingsToWrite.Enabled ? "true" : "false")}");
+                sb.AppendLine($"Password={settingsToWrite.Password}");
                 sb.AppendLine();
 
                 foreach (var program in programs)
