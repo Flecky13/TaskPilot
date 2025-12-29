@@ -32,9 +32,12 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="TaskPilot" FontSize="24" FontWeight="Bold" Foreground="White"/>
-                    <TextBlock Text="Programmüberwachung" FontSize="12" Foreground="#E3F2FD"/>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Image Source="/Images/icon.png" Width="48" Height="48" Margin="0,0,15,0" VerticalAlignment="Center"/>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="TaskPilot" FontSize="24" FontWeight="Bold" Foreground="White"/>
+                        <TextBlock Text="Programmüberwachung" FontSize="12" Foreground="#E3F2FD"/>
+                    </StackPanel>
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">

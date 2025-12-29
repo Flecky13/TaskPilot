@@ -303,7 +303,7 @@ namespace TaskPilot
 
             try
             {
-                WebServer.Start(_monitor, _serverSettings.Port, _configPath);
+                WebServer.Start(_monitor, _serverSettings, _configPath);
             }
             catch (Exception ex)
             {
@@ -316,7 +316,7 @@ namespace TaskPilot
             _serverSettings = settings;
             try
             {
-                await WebServer.RestartAsync(_monitor, settings.Port, settings.Enabled, _configPath);
+                await WebServer.RestartAsync(_monitor, settings, _configPath);
             }
             catch (Exception ex)
             {

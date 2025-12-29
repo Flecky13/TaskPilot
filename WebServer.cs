@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
@@ -24,6 +25,7 @@ namespace TaskPilot
         private static bool _hubContextReady = false; // Flag um zu überprüfen ob HubContext bereit ist
         private static Task? _runTask;
         private static string? _configPath;
+        private static bool _httpsActive = false; // Flag ob HTTPS aktiv ist
         private const string JwtSecretKey = "TaskPilot_Default_Secret_Key_For_JWT_Tokens_2024"; // In Produktion von außen setzen
 
         public static void NotifyAutoStartChanged(bool enabled)
@@ -56,7 +58,7 @@ namespace TaskPilot
             }
         }
 
-        public static void Start(ProcessMonitor monitor, int port = 5110, string? configPath = null)
+        public static void Start(ProcessMonitor monitor, IniConfigReader.ServerSettings serverSettings, string? configPath = null)
         {
             if (_initialized) return;
             _initialized = true;
@@ -64,7 +66,40 @@ namespace TaskPilot
 
             var builder = WebApplication.CreateBuilder();
             // Binde auf alle Interfaces, damit Zugriff auch übers Netzwerk möglich ist
-            builder.WebHost.UseKestrel().UseUrls($"http://0.0.0.0:{port}");
+            builder.WebHost.UseKestrel(options =>
+            {
+                if (serverSettings.HttpsEnabled)
+                {
+                    var certificate = LoadCertificateByThumbprint(serverSettings.CertificateThumbprint);
+                    if (certificate != null)
+                    {
+                        if (CanUseCertificatePrivateKey(certificate))
+                        {
+                            options.ListenAnyIP(serverSettings.Port, listen => listen.UseHttps(certificate));
+                            _httpsActive = true;
+                            System.Diagnostics.Debug.WriteLine($"[WebServer] HTTPS aktiviert auf Port {serverSettings.Port} (Thumbprint: {certificate.Thumbprint})");
+                        }
+                        else
+                        {
+                            options.ListenAnyIP(serverSettings.Port);
+                            _httpsActive = false;
+                            System.Diagnostics.Debug.WriteLine($"[WebServer] Zertifikat gefunden, aber Zugriff auf privaten Schlüssel nicht möglich. Fallback auf HTTP Port {serverSettings.Port}.");
+                        }
+                    }
+                    else
+                    {
+                        options.ListenAnyIP(serverSettings.Port);
+                        _httpsActive = false;
+                        System.Diagnostics.Debug.WriteLine($"[WebServer] HTTPS konfiguriert, aber Zertifikat nicht gefunden. Fallback auf HTTP Port {serverSettings.Port}.");
+                    }
+                }
+                else
+                {
+                    options.ListenAnyIP(serverSettings.Port);
+                    _httpsActive = false;
+                    System.Diagnostics.Debug.WriteLine($"[WebServer] HTTPS deaktiviert. HTTP Port {serverSettings.Port} aktiv.");
+                }
+            });
 
             builder.Services.AddSingleton(monitor);
             builder.Services.AddSignalR();
@@ -79,6 +114,22 @@ namespace TaskPilot
 
             _app = builder.Build();
             _app.UseCors();
+
+            // HTTP zu HTTPS Umleitung, wenn HTTPS aktiv ist
+            if (_httpsActive)
+            {
+                _app.Use(async (context, next) =>
+                {
+                    if (!context.Request.IsHttps)
+                    {
+                        var httpsUrl = $"https://{context.Request.Host}{context.Request.Path}{context.Request.QueryString}";
+                        context.Response.Redirect(httpsUrl, permanent: true);
+                        return;
+                    }
+                    await next();
+                });
+            }
+
             _app.UseDefaultFiles();
             _app.UseStaticFiles();
 
@@ -339,7 +390,7 @@ namespace TaskPilot
                 System.Diagnostics.Debug.WriteLine("[WebServer] Setup complete");
             });
 
-            System.Diagnostics.Debug.WriteLine($"[WebServer] Starting on port {port}...");
+            System.Diagnostics.Debug.WriteLine($"[WebServer] Starting on port {serverSettings.Port}...");
             _runTask = _app.RunAsync();
         }
 
@@ -366,15 +417,114 @@ namespace TaskPilot
                 _hubContextReady = false;
                 _initialized = false;
                 _runTask = null;
+                _httpsActive = false;
             }
         }
 
-        public static async Task RestartAsync(ProcessMonitor monitor, int port, bool enabled, string? configPath = null)
+        public static async Task RestartAsync(ProcessMonitor monitor, IniConfigReader.ServerSettings settings, string? configPath = null)
         {
             await StopAsync();
-            if (enabled)
+            if (settings.Enabled)
             {
-                Start(monitor, port, configPath);
+                Start(monitor, settings, configPath);
+            }
+        }
+
+        private static X509Certificate2? LoadCertificateByThumbprint(string thumbprint)
+        {
+            if (string.IsNullOrWhiteSpace(thumbprint))
+                return null;
+
+            var normalized = thumbprint.Replace(" ", string.Empty).ToUpperInvariant();
+
+            X509Certificate2? FindInStore(StoreLocation location)
+            {
+                try
+                {
+                    using var store = new X509Store(StoreName.My, location);
+                    store.Open(OpenFlags.ReadOnly);
+                    var matches = store.Certificates
+                        .Find(X509FindType.FindByThumbprint, normalized, validOnly: false)
+                        .OfType<X509Certificate2>()
+                        .ToList();
+
+                    var withKey = matches.FirstOrDefault(c => c.HasPrivateKey && HasServerAuthenticationEku(c));
+                    if (withKey == null && matches.Count > 0)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[WebServer] Zertifikat mit Thumbprint gefunden, aber kein privater Schlüssel oder fehlende ServerAuth EKU (Store={location}).");
+                    }
+                    return withKey;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[WebServer] Zertifikatssuche in {location} fehlgeschlagen: {ex.Message}");
+                    return null;
+                }
+            }
+
+            var certificate = FindInStore(StoreLocation.CurrentUser) ?? FindInStore(StoreLocation.LocalMachine);
+
+            if (certificate == null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[WebServer] Kein Zertifikat mit Thumbprint {normalized} gefunden.");
+            }
+
+            return certificate;
+        }
+
+        private static bool HasServerAuthenticationEku(X509Certificate2 cert)
+        {
+            try
+            {
+                foreach (var ext in cert.Extensions)
+                {
+                    if (ext is X509EnhancedKeyUsageExtension eku)
+                    {
+                        foreach (var oid in eku.EnhancedKeyUsages)
+                        {
+                            if (oid?.Value == "1.3.6.1.5.5.7.3.1") // Server Authentication
+                                return true;
+                        }
+                        return false; // EKU vorhanden, aber kein Server Auth
+                    }
+                }
+                // Keine EKU-Erweiterung vorhanden → meist alle Zwecke erlaubt
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool CanUseCertificatePrivateKey(X509Certificate2 cert)
+        {
+            try
+            {
+                // Versuche RSA
+                using var rsa = cert.GetRSAPrivateKey();
+                if (rsa != null)
+                {
+                    var data = new byte[] { 1, 2, 3, 4 };
+                    var sig = rsa.SignData(data, System.Security.Cryptography.HashAlgorithmName.SHA256, System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+                    return sig != null && sig.Length > 0;
+                }
+
+                // Versuche ECDSA
+                using var ecdsa = cert.GetECDsaPrivateKey();
+                if (ecdsa != null)
+                {
+                    var data = new byte[] { 1, 2, 3, 4 };
+                    var sig = ecdsa.SignData(data, System.Security.Cryptography.HashAlgorithmName.SHA256);
+                    return sig != null && sig.Length > 0;
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[WebServer] Private-Key-Test fehlgeschlagen: {ex.Message}");
+                return false;
             }
         }
 

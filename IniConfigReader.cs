@@ -15,6 +15,8 @@ namespace TaskPilot
         {
             public int Port { get; set; } = 5110;
             public bool Enabled { get; set; } = true;
+            public bool HttpsEnabled { get; set; } = false;
+            public string CertificateThumbprint { get; set; } = string.Empty;
             public string Password { get; set; } = "admin";
         }
 
@@ -148,6 +150,12 @@ namespace TaskPilot
                     case "enabled":
                         settings.Enabled = value.Equals("true", StringComparison.OrdinalIgnoreCase);
                         break;
+                    case "httpsenabled":
+                        settings.HttpsEnabled = value.Equals("true", StringComparison.OrdinalIgnoreCase);
+                        break;
+                    case "certificatethumbprint":
+                        settings.CertificateThumbprint = value;
+                        break;
                     case "password":
                         if (!string.IsNullOrWhiteSpace(value))
                             settings.Password = value;
@@ -163,10 +171,12 @@ namespace TaskPilot
             var defaultConfig = @"; TaskPilot Konfigurationsdatei
 ;
 ; Globale Server-Einstellungen
-[Server]
-Port=5110
-Enabled=true
-Password=admin
+            [Server]
+            Port=5110
+            Enabled=true
+            HttpsEnabled=false
+            CertificateThumbprint=
+            Password=admin
 
 ; Programme:
 ; Format:
@@ -249,10 +259,12 @@ Description=Windows Rechner
                 sb.AppendLine("; Generiert am: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
                 sb.AppendLine();
 
-                // Globale Server-Einstellungen (inkl. Passwort)
+                // Globale Server-Einstellungen (inkl. Passwort & HTTPS)
                 sb.AppendLine("[Server]");
                 sb.AppendLine($"Port={settingsToWrite.Port}");
                 sb.AppendLine($"Enabled={(settingsToWrite.Enabled ? "true" : "false")}");
+                sb.AppendLine($"HttpsEnabled={(settingsToWrite.HttpsEnabled ? "true" : "false")}");
+                sb.AppendLine($"CertificateThumbprint={settingsToWrite.CertificateThumbprint}");
                 sb.AppendLine($"Password={settingsToWrite.Password}");
                 sb.AppendLine();
 

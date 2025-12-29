@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using System.Security.Cryptography.X509Certificates;
 
 namespace TaskPilot
 {
@@ -19,6 +20,9 @@ namespace TaskPilot
         private List<MonitoredProgram> _originalMonitoredPrograms;
         private int _serverPort;
         private bool _serverEnabled;
+        private bool _httpsEnabled;
+        private string _certificateThumbprint = string.Empty;
+        private string _certificateDisplayLabel = string.Empty;
         private string _securityPassword = "admin";
 
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -76,6 +80,46 @@ namespace TaskPilot
             }
         }
 
+        public bool HttpsEnabled
+        {
+            get => _httpsEnabled;
+            set
+            {
+                if (_httpsEnabled != value)
+                {
+                    _httpsEnabled = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public string CertificateThumbprint
+        {
+            get => _certificateThumbprint;
+            set
+            {
+                if (_certificateThumbprint != value)
+                {
+                    _certificateThumbprint = value;
+                    OnPropertyChanged();
+                    UpdateCertificateDisplayLabel();
+                }
+            }
+        }
+
+        public string CertificateDisplayLabel
+        {
+            get => _certificateDisplayLabel;
+            set
+            {
+                if (_certificateDisplayLabel != value)
+                {
+                    _certificateDisplayLabel = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
         public string SecurityPassword
         {
             get => _securityPassword;
@@ -97,7 +141,11 @@ namespace TaskPilot
 
             _serverPort = serverSettings.Port;
             _serverEnabled = serverSettings.Enabled;
+            _httpsEnabled = serverSettings.HttpsEnabled;
+            _certificateThumbprint = serverSettings.CertificateThumbprint;
             _securityPassword = serverSettings.Password;
+
+            UpdateCertificateDisplayLabel();
 
             LoadAvailableProcesses();
         }
@@ -267,12 +315,95 @@ namespace TaskPilot
 
         public IniConfigReader.ServerSettings GetServerSettings()
         {
+            var normalizedThumbprint = (_certificateThumbprint ?? string.Empty)
+                .Replace(" ", string.Empty)
+                .Trim();
+
             return new IniConfigReader.ServerSettings
             {
                 Port = _serverPort,
                 Enabled = _serverEnabled,
+                HttpsEnabled = _httpsEnabled,
+                CertificateThumbprint = normalizedThumbprint,
                 Password = _securityPassword
             };
+        }
+
+        private void UpdateCertificateDisplayLabel()
+        {
+            try
+            {
+                var thumb = (_certificateThumbprint ?? string.Empty).Replace(" ", string.Empty);
+                if (string.IsNullOrWhiteSpace(thumb))
+                {
+                    CertificateDisplayLabel = "Kein Zertifikat ausgewählt";
+                    return;
+                }
+
+                // Versuche CurrentUser, dann LocalMachine
+                var (cert, storeText) = CertificateLookup.FindByThumbprintWithStore(thumb);
+                if (cert == null)
+                {
+                    CertificateDisplayLabel = "Zertifikat nicht gefunden";
+                    return;
+                }
+
+                var displayName = !string.IsNullOrWhiteSpace(cert.FriendlyName)
+                    ? cert.FriendlyName
+                    : CertificateLookup.ExtractCn(cert.Subject);
+
+                CertificateDisplayLabel = $"{storeText} — {displayName}";
+            }
+            catch
+            {
+                CertificateDisplayLabel = string.Empty;
+            }
+        }
+
+        private static class CertificateLookup
+        {
+            public static (X509Certificate2? cert, string storeText) FindByThumbprintWithStore(string thumbprint)
+            {
+                var normalized = (thumbprint ?? string.Empty).Replace(" ", string.Empty).ToUpperInvariant();
+                var cert = FindInStore(StoreLocation.CurrentUser, out var storeTextCU);
+                if (cert != null) return (cert, storeTextCU);
+                cert = FindInStore(StoreLocation.LocalMachine, out var storeTextLM);
+                if (cert != null) return (cert, storeTextLM);
+                return (null, string.Empty);
+
+                X509Certificate2? FindInStore(StoreLocation location, out string storeText)
+                {
+                    storeText = location == StoreLocation.CurrentUser ? "CurrentUser\\My" : "LocalMachine\\My";
+                    try
+                    {
+                        using var store = new X509Store(StoreName.My, location);
+                        store.Open(OpenFlags.ReadOnly);
+                        var match = store.Certificates
+                            .Find(X509FindType.FindByThumbprint, normalized, validOnly: false)
+                            .OfType<X509Certificate2>()
+                            .FirstOrDefault();
+                        return match;
+                    }
+                    catch
+                    {
+                        return null;
+                    }
+                }
+            }
+
+            public static string ExtractCn(string subject)
+            {
+                if (string.IsNullOrWhiteSpace(subject)) return string.Empty;
+                foreach (var part in subject.Split(','))
+                {
+                    var p = part.Trim();
+                    if (p.StartsWith("CN=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return p.Substring(3).Trim();
+                    }
+                }
+                return subject;
+            }
         }
 
         public void RemoveProcess(ConfigurableProcess process)

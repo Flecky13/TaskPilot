@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.ComponentModel;
+using System.Security.Cryptography.X509Certificates;
 
 namespace TaskPilot
 {
@@ -321,6 +322,12 @@ namespace TaskPilot
                     return;
                 }
 
+                if (serverSettings.HttpsEnabled && string.IsNullOrWhiteSpace(serverSettings.CertificateThumbprint))
+                {
+                    DialogHelper.ShowValidationError("Bitte einen Zertifikat-Thumbprint angeben oder HTTPS deaktivieren.");
+                    return;
+                }
+
                 // Speichere ALLE Programme + Server-Einstellungen (inkl. Passwort) in die INI
                 IniConfigReader.SaveConfiguration(_configFilePath, allPrograms, serverSettings);
 
@@ -340,6 +347,146 @@ namespace TaskPilot
             catch (Exception ex)
             {
                 DialogHelper.ShowOperationError("Speichern der Konfiguration", ex.Message);
+            }
+        }
+
+        private void SelectCertificate_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var collection = new X509Certificate2Collection();
+
+                void AddFromStore(StoreLocation location)
+                {
+                    try
+                    {
+                        using var store = new X509Store(StoreName.My, location);
+                        store.Open(OpenFlags.ReadOnly);
+                        collection.AddRange(store.Certificates);
+                    }
+                    catch (Exception ex)
+                    {
+                        DialogHelper.ShowOperationError($"Zugriff auf Zertifikatsspeicher {location}", ex.Message);
+                    }
+                }
+
+                AddFromStore(StoreLocation.CurrentUser);
+                AddFromStore(StoreLocation.LocalMachine);
+
+                // Nur Zertifikate mit privatem Schlüssel und Server Auth EKU anzeigen
+                var filtered = new X509Certificate2Collection();
+                foreach (var cert in collection.OfType<X509Certificate2>())
+                {
+                    if (cert.HasPrivateKey && HasServerAuthenticationEku(cert))
+                    {
+                        filtered.Add(cert);
+                    }
+                }
+
+                if (filtered.Count == 0)
+                {
+                    DialogHelper.ShowValidationError("Kein Zertifikat im Windows Store gefunden.");
+                    return;
+                }
+
+                var selection = X509Certificate2UI.SelectFromCollection(
+                    filtered,
+                    "Zertifikat auswählen",
+                    "Wählen Sie ein Zertifikat mit privatem Schlüssel für HTTPS",
+                    X509SelectionFlag.SingleSelection);
+
+                if (selection.Count > 0)
+                {
+                    var cert = selection[0];
+                    var thumb = cert.Thumbprint?.Replace(" ", string.Empty) ?? string.Empty;
+                    if (_viewModel != null)
+                    {
+                        _viewModel.CertificateThumbprint = thumb;
+                        _viewModel.HttpsEnabled = true;
+                        // Store- und Name-Anzeige aktualisieren
+                        var (foundCert, storeText) = CertificateLookup.FindByThumbprintWithStore(thumb);
+                        var displayName = !string.IsNullOrWhiteSpace(foundCert?.FriendlyName)
+                            ? foundCert!.FriendlyName
+                            : CertificateLookup.ExtractCn(foundCert?.Subject ?? cert.Subject);
+                        _viewModel.CertificateDisplayLabel = $"{storeText} — {displayName}";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DialogHelper.ShowOperationError("Zertifikat auswählen", ex.Message);
+            }
+        }
+
+        private static class CertificateLookup
+        {
+            public static (X509Certificate2? cert, string storeText) FindByThumbprintWithStore(string thumbprint)
+            {
+                var normalized = (thumbprint ?? string.Empty).Replace(" ", string.Empty).ToUpperInvariant();
+                var cert = FindInStore(StoreLocation.CurrentUser, out var storeTextCU);
+                if (cert != null) return (cert, storeTextCU);
+                cert = FindInStore(StoreLocation.LocalMachine, out var storeTextLM);
+                if (cert != null) return (cert, storeTextLM);
+                return (null, string.Empty);
+
+                X509Certificate2? FindInStore(StoreLocation location, out string storeText)
+                {
+                    storeText = location == StoreLocation.CurrentUser ? "CurrentUser\\My" : "LocalMachine\\My";
+                    try
+                    {
+                        using var store = new X509Store(StoreName.My, location);
+                        store.Open(OpenFlags.ReadOnly);
+                        var match = store.Certificates
+                            .Find(X509FindType.FindByThumbprint, normalized, validOnly: false)
+                            .OfType<X509Certificate2>()
+                            .FirstOrDefault();
+                        return match;
+                    }
+                    catch
+                    {
+                        return null;
+                    }
+                }
+            }
+
+            public static string ExtractCn(string subject)
+            {
+                if (string.IsNullOrWhiteSpace(subject)) return string.Empty;
+                // Subject wie "CN=example.com, O=..." → CN extrahieren
+                foreach (var part in subject.Split(','))
+                {
+                    var p = part.Trim();
+                    if (p.StartsWith("CN=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return p.Substring(3).Trim();
+                    }
+                }
+                return subject;
+            }
+        }
+
+        private static bool HasServerAuthenticationEku(X509Certificate2 cert)
+        {
+            try
+            {
+                foreach (var ext in cert.Extensions)
+                {
+                    if (ext is X509EnhancedKeyUsageExtension eku)
+                    {
+                        foreach (var oid in eku.EnhancedKeyUsages)
+                        {
+                            if (oid?.Value == "1.3.6.1.5.5.7.3.1") // Server Authentication
+                                return true;
+                        }
+                        return false; // EKU vorhanden, aber kein Server Auth
+                    }
+                }
+                // Keine EKU-Erweiterung vorhanden → meist alle Zwecke erlaubt
+                return true;
+            }
+            catch
+            {
+                return false;
             }
         }
 

@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <Resource Include="icons\toolicon.ico" />
+    <Resource Include="Images\icon.png" />
   </ItemGroup>
 
   <ItemGroup>

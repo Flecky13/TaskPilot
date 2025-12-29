@@ -107,18 +107,26 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Server-Einstellungen links -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0" >
-                    <TextBlock Text="Webserver" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                        <TextBlock Text="Port:" VerticalAlignment="Center" FontSize="11"/>
-                        <TextBox Width="80" Height="24" Padding="6,2" FontSize="11"
-                                 Text="{Binding ServerPort, UpdateSourceTrigger=PropertyChanged}" />
+                <StackPanel Grid.Column="0" Orientation="Vertical" VerticalAlignment="Center" Margin="0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,6">
+                        <TextBlock Text="Webserver" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
+                        <CheckBox Content="Server aktiv" IsChecked="{Binding ServerEnabled, Mode=TwoWay}" VerticalAlignment="Center" FontSize="11" Margin="12,0,0,0"/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                            <TextBlock Text="Port:" VerticalAlignment="Center" FontSize="11"/>
+                            <TextBox Width="80" Height="24" Padding="6,2" FontSize="11"
+                                     Text="{Binding ServerPort, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="24,0,0,0">
+                            <TextBlock Text="Passwort:" VerticalAlignment="Center" FontSize="11"/>
+                            <TextBox Width="140" Height="24" Padding="6,2" FontSize="11"
+                                     Text="{Binding SecurityPassword, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
                     </StackPanel>
-                    <CheckBox Content="Server aktiv" IsChecked="{Binding ServerEnabled, Mode=TwoWay}" VerticalAlignment="Center" FontSize="11" Margin="12,0,0,0"/>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="24,0,0,0">
-                        <TextBlock Text="Passwort:" VerticalAlignment="Center" FontSize="11"/>
-                        <TextBox Width="120" Height="24" Padding="6,2" FontSize="11"
-                                 Text="{Binding SecurityPassword, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <CheckBox Content="HTTPS" IsChecked="{Binding HttpsEnabled, Mode=TwoWay}" VerticalAlignment="Center" FontSize="11"/>
+                        <Button Content="Aus Store wählen..." Click="SelectCertificate_Click" Padding="10,4" Margin="12,0,0,0" FontSize="11"/>
+                        <TextBlock Text="{Binding CertificateDisplayLabel}" Margin="12,0,0,0" VerticalAlignment="Center" FontSize="11" Foreground="#555"/>
                     </StackPanel>
                 </StackPanel>
 
