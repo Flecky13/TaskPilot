@@ -1,7 +1,9 @@
 # TaskPilot
 ![Alt text](Images/icon.png)
+
 Eine Systemtray-Anwendung zur Überwachung von Programmen.
 Die Programme können über StartCommand Automatisch gestartet werden
+Anwendung kann die überwachen Programme darstellen und mehr
 
 ## Features
 
@@ -68,6 +70,13 @@ IsSelected=true
 - **StartCommand**: Befehl zum erneuten starten des Prozesses mit Optionen
 - **AutoRestart**: Automatisches Neustarten bei Absturz (true/false)
 - **IsSelected**: Prozess wird überwacht (true) oder ignoriert (false)
+
+## Webserver & REST-API
+- Aktivierung: Im Konfigurationsfenster unter "Webserver" den Schalter "Server aktiv" setzen und Port festlegen.
+- HTTPS: Im gleichen Dialog "HTTPS" aktivieren und ein Zertifikat aus dem Windows-Zertifikatsspeicher auswählen. Erforderlich ist ein Zertifikat mit **privatem Schlüssel** im Store **CurrentUser\\My** (exportierbar). Liegt kein nutzbarer Schlüssel vor, fällt die App automatisch auf HTTP zurück.
+- Passwortschutz
+- Änderungen übernehmen: Nach dem Speichern der Server-Einstellungen in der Konfiguration wird der Webserver automatisch mit den neuen Werten neu gestartet.
+
 
 ## Installation & Berechtigungen
 
